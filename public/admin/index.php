@@ -136,6 +136,7 @@ require __DIR__ . '/_layout_top.php';
                         </td>
                         <td class="text-muted small"><?= htmlspecialchars($t['updated_at']) ?></td>
                         <td class="text-end">
+                            <a class="btn btn-sm btn-outline-primary" href="/admin/view.php?id=<?= (int)$t['id'] ?>">View</a>
                             <form method="post" action="/admin/delete.php" class="d-inline" onsubmit="return confirm('Delete task #<?= (int)$t['id'] ?>?');">
                                 <input type="hidden" name="id" value="<?= (int)$t['id'] ?>">
                                 <button class="btn btn-sm btn-outline-danger" type="submit">Delete</button>
