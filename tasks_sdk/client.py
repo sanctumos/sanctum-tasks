@@ -142,7 +142,8 @@ class TasksClient:
         self,
         title: str,
         status: Optional[str] = None,
-        assigned_to_user_id: Optional[int] = None
+        assigned_to_user_id: Optional[int] = None,
+        body: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Create a new task.
@@ -151,6 +152,7 @@ class TasksClient:
             title: Task title (required)
             status: Task status: 'todo', 'doing', or 'done' (default: 'todo')
             assigned_to_user_id: User ID to assign task to (optional)
+            body: Task description/details (optional)
         
         Returns:
             Dictionary containing task data
@@ -159,7 +161,8 @@ class TasksClient:
             >>> task = client.create_task(
             ...     title="Fix deployment bug",
             ...     status="todo",
-            ...     assigned_to_user_id=1
+            ...     assigned_to_user_id=1,
+            ...     body="Check logs and deployment status"
             ... )
             >>> print(task['id'])
             123
@@ -172,6 +175,8 @@ class TasksClient:
             data['status'] = status
         if assigned_to_user_id is not None:
             data['assigned_to_user_id'] = assigned_to_user_id
+        if body is not None:
+            data['body'] = body
         
         response = self._request('POST', 'create-task.php', data=data)
         return response['task']
@@ -181,7 +186,8 @@ class TasksClient:
         task_id: int,
         title: Optional[str] = None,
         status: Optional[str] = None,
-        assigned_to_user_id: Optional[int] = None
+        assigned_to_user_id: Optional[int] = None,
+        body: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Update an existing task.
@@ -191,6 +197,7 @@ class TasksClient:
             title: New title (optional, only updates if provided)
             status: New status: 'todo', 'doing', or 'done' (optional)
             assigned_to_user_id: New assigned user ID (optional, set to None to unassign)
+            body: New body/description (optional, set to None or empty string to clear)
         
         Returns:
             Dictionary containing updated task data
@@ -199,7 +206,8 @@ class TasksClient:
             >>> task = client.update_task(
             ...     task_id=123,
             ...     status="doing",
-            ...     assigned_to_user_id=2
+            ...     assigned_to_user_id=2,
+            ...     body="Updated description"
             ... )
         """
         data = {'id': task_id}
@@ -210,6 +218,8 @@ class TasksClient:
             data['status'] = status
         if assigned_to_user_id is not None:
             data['assigned_to_user_id'] = assigned_to_user_id
+        if body is not None:
+            data['body'] = body
         
         response = self._request('POST', 'update-task.php', data=data)
         return response['task']

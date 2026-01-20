@@ -45,7 +45,8 @@ def create_task(args: Dict[str, Any], api_key: str) -> Dict[str, Any]:
         task = client.create_task(
             title=args.get("title"),
             status=args.get("status"),
-            assigned_to_user_id=args.get("assigned-to-user-id")
+            assigned_to_user_id=args.get("assigned-to-user-id"),
+            body=args.get("body")
         )
         
         return {
@@ -82,7 +83,8 @@ def update_task(args: Dict[str, Any], api_key: str) -> Dict[str, Any]:
             task_id=args.get("task-id"),
             title=args.get("title"),
             status=args.get("status"),
-            assigned_to_user_id=args.get("assigned-to-user-id")
+            assigned_to_user_id=args.get("assigned-to-user-id"),
+            body=args.get("body")
         )
         
         return {
@@ -272,6 +274,13 @@ def get_plugin_description() -> Dict[str, Any]:
                         "description": "User ID to assign task to",
                         "required": False,
                         "default": None
+                    },
+                    {
+                        "name": "body",
+                        "type": "string",
+                        "description": "Task description/details",
+                        "required": False,
+                        "default": None
                     }
                 ]
             },
@@ -311,6 +320,13 @@ def get_plugin_description() -> Dict[str, Any]:
                         "name": "assigned-to-user-id",
                         "type": "integer",
                         "description": "New assigned user ID (set to null to unassign)",
+                        "required": False,
+                        "default": None
+                    },
+                    {
+                        "name": "body",
+                        "type": "string",
+                        "description": "New body/description (set to null or empty string to clear)",
                         "required": False,
                         "default": None
                     }
@@ -419,8 +435,8 @@ Configuration:
   Base URL is hard-coded to: https://tasks.technonomicon.net
 
 Examples:
-  python cli.py create-task --api-key "YOUR_KEY" --title "Fix deployment bug" --status "todo" --assigned-to-user-id 1
-  python cli.py update-task --api-key "YOUR_KEY" --task-id 123 --status "doing"
+  python cli.py create-task --api-key "YOUR_KEY" --title "Fix deployment bug" --body "Check logs" --status "todo" --assigned-to-user-id 1
+  python cli.py update-task --api-key "YOUR_KEY" --task-id 123 --status "doing" --body "Updated description"
   python cli.py list-tasks --api-key "YOUR_KEY" --status "todo" --limit 10
   python cli.py get-task --api-key "YOUR_KEY" --task-id 123
   python cli.py delete-task --api-key "YOUR_KEY" --task-id 123
@@ -444,6 +460,7 @@ Examples:
     create_parser.add_argument("--title", required=True, help="Task title")
     create_parser.add_argument("--status", choices=["todo", "doing", "done"], default="todo", help="Task status")
     create_parser.add_argument("--assigned-to-user-id", type=int, dest="assigned_to_user_id", help="User ID to assign task to")
+    create_parser.add_argument("--body", help="Task description/details")
     
     # Update task command
     update_parser = subparsers.add_parser("update-task", help="Update an existing task")
@@ -452,6 +469,7 @@ Examples:
     update_parser.add_argument("--title", help="New title")
     update_parser.add_argument("--status", choices=["todo", "doing", "done"], help="New status")
     update_parser.add_argument("--assigned-to-user-id", type=int, dest="assigned_to_user_id", help="New assigned user ID")
+    update_parser.add_argument("--body", help="New body/description (set to empty string to clear)")
     
     # List tasks command
     list_parser = subparsers.add_parser("list-tasks", help="List tasks")
