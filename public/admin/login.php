@@ -40,9 +40,6 @@ require __DIR__ . '/_layout_top.php';
                     </div>
                     <button class="btn btn-primary w-100" type="submit">Sign in</button>
                 </form>
-                <div class="text-muted small mt-3">
-                    Default: <code>admin</code> / <code>go0dp4ssw0rd</code>
-                </div>
             </div>
         </div>
     </div>
