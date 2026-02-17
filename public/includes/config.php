@@ -29,7 +29,8 @@ define('SESSION_NAME', envOrDefault('TASKS_SESSION_NAME', 'technonomicon_tasks')
 define('SESSION_LIFETIME', (int)envOrDefault('TASKS_SESSION_LIFETIME', 3600));
 define('PASSWORD_COST', (int)envOrDefault('TASKS_PASSWORD_COST', 12));
 define('PASSWORD_MIN_LENGTH', (int)envOrDefault('TASKS_PASSWORD_MIN_LENGTH', 12));
-define('SESSION_COOKIE_SECURE', envBool('TASKS_SESSION_COOKIE_SECURE', false));
+// Default secure=true for HTTPS; set TASKS_SESSION_COOKIE_SECURE=0 for local HTTP dev only
+define('SESSION_COOKIE_SECURE', envBool('TASKS_SESSION_COOKIE_SECURE', true));
 define('LOGIN_LOCK_THRESHOLD', (int)envOrDefault('TASKS_LOGIN_LOCK_THRESHOLD', 5));
 define('LOGIN_LOCK_WINDOW_SECONDS', (int)envOrDefault('TASKS_LOGIN_LOCK_WINDOW_SECONDS', 900));
 define('LOGIN_LOCK_SECONDS', (int)envOrDefault('TASKS_LOGIN_LOCK_SECONDS', 900));
