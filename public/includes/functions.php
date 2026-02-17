@@ -541,13 +541,47 @@ function verifyTotpCode(string $secret, string $code, int $window = 1): bool {
     return false;
 }
 
+/** Encrypt MFA secret for storage (C-02). Returns "enc:" . base64(iv . tag . ciphertext). */
+function encryptMfaSecret(string $plaintext): string {
+    $cipher = 'aes-256-gcm';
+    $key = getMfaEncryptionKey();
+    $ivLen = openssl_cipher_iv_length($cipher);
+    $iv = random_bytes($ivLen);
+    $tag = '';
+    $ciphertext = openssl_encrypt($plaintext, $cipher, $key, OPENSSL_RAW_DATA, $iv, $tag, '', 16);
+    if ($ciphertext === false || $tag === '') {
+        return '';
+    }
+    return 'enc:' . base64_encode($iv . $tag . $ciphertext);
+}
+
+/** Decrypt MFA secret from storage. Returns plaintext or original value if not encrypted. */
+function decryptMfaSecret(string $stored): string {
+    if (strpos($stored, 'enc:') !== 0) {
+        return $stored;
+    }
+    $raw = base64_decode(substr($stored, 4), true);
+    $cipher = 'aes-256-gcm';
+    $ivLen = openssl_cipher_iv_length($cipher);
+    if ($raw === false || strlen($raw) < $ivLen + 16) {
+        return '';
+    }
+    $key = getMfaEncryptionKey();
+    $iv = substr($raw, 0, $ivLen);
+    $tag = substr($raw, $ivLen, 16);
+    $ciphertext = substr($raw, $ivLen + 16);
+    $decrypted = @openssl_decrypt($ciphertext, $cipher, $key, OPENSSL_RAW_DATA, $iv, $tag);
+    return $decrypted !== false ? $decrypted : '';
+}
+
 function enableUserMfa(int $userId, string $secret): array {
     if ($userId <= 0 || trim($secret) === '') {
         return ['success' => false, 'error' => 'Invalid MFA setup'];
     }
     $db = getDbConnection();
+    $encrypted = encryptMfaSecret(strtoupper(trim($secret)));
     $stmt = $db->prepare("UPDATE users SET mfa_secret = :secret, mfa_enabled = 1 WHERE id = :id");
-    $stmt->bindValue(':secret', strtoupper(trim($secret)), SQLITE3_TEXT);
+    $stmt->bindValue(':secret', $encrypted, SQLITE3_TEXT);
     $stmt->bindValue(':id', $userId, SQLITE3_INTEGER);
     $stmt->execute();
     createAuditLog($userId, 'user.mfa_enable', 'user', (string)$userId);
@@ -706,14 +740,18 @@ function checkApiRateLimit(string $apiKey, int $maxRequests = API_RATE_LIMIT_REQ
 function createApiKeyForUser($userId, $keyName, ?int $createdByUserId = null): string {
     $db = getDbConnection();
     $apiKey = bin2hex(random_bytes(32));
+    $keyHash = hash('sha256', $apiKey);
+    $keyPreview = substr($apiKey, 0, 12);
 
     $stmt = $db->prepare("
-        INSERT INTO api_keys (user_id, key_name, api_key, created_by_user_id)
-        VALUES (:uid, :name, :key, :created_by)
+        INSERT INTO api_keys (user_id, key_name, api_key, api_key_hash, key_preview, created_by_user_id)
+        VALUES (:uid, :name, :key, :hash, :preview, :created_by)
     ");
     $stmt->bindValue(':uid', (int)$userId, SQLITE3_INTEGER);
     $stmt->bindValue(':name', truncateString(trim((string)$keyName) ?: 'Unnamed Key', 80), SQLITE3_TEXT);
-    $stmt->bindValue(':key', $apiKey, SQLITE3_TEXT);
+    $stmt->bindValue(':key', $keyHash, SQLITE3_TEXT);
+    $stmt->bindValue(':hash', $keyHash, SQLITE3_TEXT);
+    $stmt->bindValue(':preview', $keyPreview, SQLITE3_TEXT);
     if ($createdByUserId === null) {
         $stmt->bindValue(':created_by', null, SQLITE3_NULL);
     } else {
@@ -731,6 +769,7 @@ function createApiKeyForUser($userId, $keyName, ?int $createdByUserId = null): s
 
 function validateApiKeyAndGetUser($apiKey): ?array {
     $db = getDbConnection();
+    $keyHash = hash('sha256', $apiKey);
     $stmt = $db->prepare("
         SELECT
             ak.id AS api_key_id,
@@ -743,11 +782,11 @@ function validateApiKeyAndGetUser($apiKey): ?array {
             u.created_at AS created_at
         FROM api_keys ak
         JOIN users u ON u.id = ak.user_id
-        WHERE ak.api_key = :key
+        WHERE ak.api_key_hash = :hash
           AND ak.revoked_at IS NULL
         LIMIT 1
     ");
-    $stmt->bindValue(':key', $apiKey, SQLITE3_TEXT);
+    $stmt->bindValue(':hash', $keyHash, SQLITE3_TEXT);
     $res = $stmt->execute();
     $row = $res->fetchArray(SQLITE3_ASSOC);
     if (!$row) {
@@ -780,7 +819,7 @@ function getAllApiKeys(bool $includeRevoked = false): array {
             ak.id,
             ak.user_id,
             ak.key_name,
-            SUBSTR(ak.api_key, 1, 12) AS api_key_preview,
+            COALESCE(ak.key_preview, SUBSTR(ak.api_key, 1, 12)) AS api_key_preview,
             ak.created_at,
             ak.last_used,
             ak.revoked_at,
@@ -801,7 +840,7 @@ function getAllApiKeys(bool $includeRevoked = false): array {
 function listApiKeysForUser(int $userId, bool $includeRevoked = false): array {
     $db = getDbConnection();
     $sql = "
-        SELECT id, user_id, key_name, SUBSTR(api_key, 1, 12) AS api_key_preview, created_at, last_used, revoked_at
+        SELECT id, user_id, key_name, COALESCE(key_preview, SUBSTR(api_key, 1, 12)) AS api_key_preview, created_at, last_used, revoked_at
         FROM api_keys
         WHERE user_id = :uid
           " . ($includeRevoked ? "" : "AND revoked_at IS NULL") . "
@@ -982,6 +1021,16 @@ function createTask($title, $status, $createdByUserId, $assignedToUserId = null,
     return ['success' => true, 'id' => $id];
 }
 
+/** C-03: Whether the user is allowed to read/update/delete this task (admin/manager: all; member: creator or assignee). */
+function userCanAccessTask(int $userId, array $task, string $role): bool {
+    if (isAdminRole($role)) {
+        return true;
+    }
+    $createdBy = (int)($task['created_by_user_id'] ?? 0);
+    $assignedTo = (int)($task['assigned_to_user_id'] ?? 0);
+    return $createdBy === $userId || $assignedTo === $userId;
+}
+
 function getTaskById($id, bool $includeRelations = true): ?array {
     $db = getDbConnection();
     $stmt = $db->prepare("
@@ -1017,7 +1066,7 @@ function getTaskById($id, bool $includeRelations = true): ?array {
     return $task;
 }
 
-function listTasks($filters = [], bool $withPagination = false) {
+function listTasks($filters = [], bool $withPagination = false, ?array $apiUser = null) {
     $db = getDbConnection();
 
     $where = [];
@@ -1084,6 +1133,11 @@ function listTasks($filters = [], bool $withPagination = false) {
             $where[] = 't.due_at IS NOT NULL AND t.due_at >= :due_after';
             $params[':due_after'] = [$dueAfter, SQLITE3_TEXT];
         }
+    }
+
+    if ($apiUser !== null && !isAdminRole((string)($apiUser['role'] ?? ''))) {
+        $where[] = '(t.created_by_user_id = :access_uid OR t.assigned_to_user_id = :access_uid)';
+        $params[':access_uid'] = [(int)$apiUser['id'], SQLITE3_INTEGER];
     }
 
     $limit = isset($filters['limit']) ? (int)$filters['limit'] : 100;

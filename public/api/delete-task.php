@@ -17,8 +17,11 @@ if ($id <= 0) {
     apiError('validation.invalid_id', 'Missing or invalid id', 400);
 }
 
-$existing = getTaskById($id);
+$existing = getTaskById($id, false);
 if (!$existing) {
+    apiError('task.not_found', 'Task not found', 404);
+}
+if (!userCanAccessTask((int)$user['id'], $existing, (string)$user['role'])) {
     apiError('task.not_found', 'Task not found', 404);
 }
 

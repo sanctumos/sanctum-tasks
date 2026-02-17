@@ -92,7 +92,7 @@ function login($username, $password, ?string $mfaCode = null): array {
     }
 
     if ((int)$user['mfa_enabled'] === 1) {
-        $secret = (string)($user['mfa_secret'] ?? '');
+        $secret = decryptMfaSecret((string)($user['mfa_secret'] ?? ''));
         if ($secret === '' || !verifyTotpCode($secret, (string)($mfaCode ?? ''))) {
             recordLoginAttempt($username, false);
             return ['success' => false, 'error' => 'MFA code is required or invalid', 'mfa_required' => true];

@@ -29,6 +29,14 @@ if (array_key_exists('tags', $body)) $fields['tags'] = $body['tags'];
 if (array_key_exists('rank', $body)) $fields['rank'] = $body['rank'];
 if (array_key_exists('recurrence_rule', $body)) $fields['recurrence_rule'] = $body['recurrence_rule'];
 
+$existing = getTaskById($id, false);
+if (!$existing) {
+    apiError('task.not_found', 'Task not found', 404);
+}
+if (!userCanAccessTask((int)$user['id'], $existing, (string)$user['role'])) {
+    apiError('task.not_found', 'Task not found', 404);
+}
+
 $result = updateTask($id, $fields);
 if (!$result['success']) {
     $statusCode = ($result['error'] ?? '') === 'Task not found' ? 404 : 400;

@@ -21,6 +21,13 @@ $sizeBytes = isset($body['size_bytes']) ? (int)$body['size_bytes'] : null;
 if ($taskId <= 0) {
     apiError('validation.invalid_task_id', 'Missing or invalid task_id', 400);
 }
+$task = getTaskById($taskId, false);
+if (!$task) {
+    apiError('task.not_found', 'Task not found', 404);
+}
+if (!userCanAccessTask((int)$apiUser['id'], $task, (string)$apiUser['role'])) {
+    apiError('task.not_found', 'Task not found', 404);
+}
 
 $result = addTaskAttachment($taskId, (int)$apiUser['id'], $fileName, $fileUrl, $mimeType, $sizeBytes);
 if (!$result['success']) {

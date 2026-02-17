@@ -22,7 +22,7 @@ $filters = [
     'offset' => $offset,
 ];
 
-$result = listTasks($filters, true);
+$result = listTasks($filters, true, $user);
 $tasks = $result['tasks'];
 $total = (int)$result['total'];
 $limit = (int)$result['limit'];

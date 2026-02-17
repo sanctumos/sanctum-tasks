@@ -56,10 +56,7 @@ function getApiKeyFromRequest(): ?string {
     if (isset($_SERVER['HTTP_AUTHORIZATION']) && preg_match('/Bearer\s+(.+)/i', (string)$_SERVER['HTTP_AUTHORIZATION'], $m)) {
         return trim($m[1]);
     }
-    // Fallback (debug/local tooling): querystring.
-    if (isset($_GET['api_key']) && trim($_GET['api_key']) !== '') {
-        return trim($_GET['api_key']);
-    }
+    // Query-string auth removed (C-04): keys must be sent via header only to avoid logs/referrer leakage.
     return null;
 }
 

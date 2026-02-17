@@ -158,6 +158,18 @@ function getBootstrapApiKey(): string {
     return loadOrGenerateSecretFile($dir . '/api_key.txt', 32);
 }
 
+/** Returns 32-byte key for MFA secret encryption (C-02). */
+function getMfaEncryptionKey(): string {
+    $raw = trim((string)envOrDefault('TASKS_MFA_ENCRYPTION_KEY', ''));
+    if ($raw !== '' && strlen($raw) === 64 && ctype_xdigit($raw)) {
+        return hex2bin($raw);
+    }
+    $dir = dirname(DB_PATH);
+    ensureDirExists($dir);
+    $hex = loadOrGenerateSecretFile($dir . '/mfa_encryption_key.txt', 32);
+    return hex2bin($hex);
+}
+
 function initializeDatabase() {
     static $initialized = false;
     if ($initialized) {
@@ -203,6 +215,21 @@ function initializeDatabase() {
     ");
     ensureColumnExists($db, 'api_keys', 'created_by_user_id', 'INTEGER DEFAULT NULL');
     ensureColumnExists($db, 'api_keys', 'revoked_at', 'DATETIME DEFAULT NULL');
+    ensureColumnExists($db, 'api_keys', 'api_key_hash', 'TEXT DEFAULT NULL');
+    ensureColumnExists($db, 'api_keys', 'key_preview', 'TEXT DEFAULT NULL');
+    // Backfill: store only hashes; existing rows get api_key_hash and key_preview from api_key
+    $backfill = $db->query("SELECT id, api_key FROM api_keys WHERE (api_key_hash IS NULL OR api_key_hash = '') AND api_key IS NOT NULL AND api_key != ''");
+    while ($backfill && ($row = $backfill->fetchArray(SQLITE3_ASSOC))) {
+        $id = (int)$row['id'];
+        $key = (string)$row['api_key'];
+        $h = hash('sha256', $key);
+        $preview = substr($key, 0, 12);
+        $upd = $db->prepare("UPDATE api_keys SET api_key_hash = :h, key_preview = :p WHERE id = :id");
+        $upd->bindValue(':h', $h, SQLITE3_TEXT);
+        $upd->bindValue(':p', $preview, SQLITE3_TEXT);
+        $upd->bindValue(':id', $id, SQLITE3_INTEGER);
+        $upd->execute();
+    }
 
     // Task statuses (customizable workflow states)
     $db->exec("
@@ -368,20 +395,24 @@ function initializeDatabase() {
         $fix->execute();
     }
 
-    // Ensure bootstrap API key exists for admin.
+    // Ensure bootstrap API key exists for admin (store hash only, C-01).
     $apiKey = getBootstrapApiKey();
-    $stmt = $db->prepare("SELECT id FROM api_keys WHERE api_key = :key LIMIT 1");
-    $stmt->bindValue(':key', $apiKey, SQLITE3_TEXT);
+    $keyHash = hash('sha256', $apiKey);
+    $keyPreview = substr($apiKey, 0, 12);
+    $stmt = $db->prepare("SELECT id FROM api_keys WHERE api_key_hash = :hash LIMIT 1");
+    $stmt->bindValue(':hash', $keyHash, SQLITE3_TEXT);
     $res = $stmt->execute();
     $existingKey = $res->fetchArray(SQLITE3_ASSOC);
     if (!$existingKey) {
         $ins = $db->prepare("
-            INSERT INTO api_keys (user_id, key_name, api_key, created_by_user_id)
-            VALUES (:uid, :name, :key, :created_by)
+            INSERT INTO api_keys (user_id, key_name, api_key, api_key_hash, key_preview, created_by_user_id)
+            VALUES (:uid, :name, :key, :hash, :preview, :created_by)
         ");
         $ins->bindValue(':uid', $adminId, SQLITE3_INTEGER);
         $ins->bindValue(':name', 'bootstrap', SQLITE3_TEXT);
-        $ins->bindValue(':key', $apiKey, SQLITE3_TEXT);
+        $ins->bindValue(':key', $keyHash, SQLITE3_TEXT);
+        $ins->bindValue(':hash', $keyHash, SQLITE3_TEXT);
+        $ins->bindValue(':preview', $keyPreview, SQLITE3_TEXT);
         $ins->bindValue(':created_by', $adminId, SQLITE3_INTEGER);
         $ins->execute();
     }

@@ -13,6 +13,9 @@ $task = getTaskById($id, $includeRelations);
 if (!$task) {
     apiError('task.not_found', 'Task not found', 404);
 }
+if (!userCanAccessTask((int)$user['id'], $task, (string)$user['role'])) {
+    apiError('task.not_found', 'Task not found', 404);
+}
 
 apiSuccess(['task' => $task]);
 

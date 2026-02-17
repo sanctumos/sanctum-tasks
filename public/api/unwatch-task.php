@@ -21,6 +21,13 @@ if ($taskId <= 0) {
 if ($userId !== (int)$apiUser['id'] && !isAdminRole((string)$apiUser['role'])) {
     apiError('auth.forbidden', 'Only admins can remove watchers for other users', 403);
 }
+$task = getTaskById($taskId, false);
+if (!$task) {
+    apiError('task.not_found', 'Task not found', 404);
+}
+if (!userCanAccessTask((int)$apiUser['id'], $task, (string)$apiUser['role'])) {
+    apiError('task.not_found', 'Task not found', 404);
+}
 
 $result = removeTaskWatcher($taskId, $userId);
 if (!$result['success']) {

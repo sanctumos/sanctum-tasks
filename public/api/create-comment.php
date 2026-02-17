@@ -20,6 +20,13 @@ if ($taskId <= 0) {
 if ($comment === '') {
     apiError('validation.missing_comment', 'comment is required', 400);
 }
+$task = getTaskById($taskId, false);
+if (!$task) {
+    apiError('task.not_found', 'Task not found', 404);
+}
+if (!userCanAccessTask((int)$apiUser['id'], $task, (string)$apiUser['role'])) {
+    apiError('task.not_found', 'Task not found', 404);
+}
 
 $result = addTaskComment($taskId, (int)$apiUser['id'], $comment);
 if (!$result['success']) {
