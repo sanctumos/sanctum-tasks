@@ -72,6 +72,16 @@ def test_health_requires_auth_and_emits_rate_headers(php_server):
     assert "X-RateLimit-Reset" in authorized.headers
 
 
+def test_public_landing_page_labels_health_as_authenticated(php_server):
+    base_url = php_server.base_url
+
+    response = requests.get(_api_url(base_url, "/"), timeout=5)
+    assert response.status_code == 200
+    assert "Authenticated API Health" in response.text
+    assert "requires API key authentication" in response.text
+    assert 'href="/api/health.php"' in response.text
+
+
 def test_task_crud_search_sort_and_collaboration_endpoints(php_server):
     base_url = php_server.base_url
     headers = _auth_headers(php_server.api_key)

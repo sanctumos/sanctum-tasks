@@ -166,4 +166,4 @@ The plugin returns structured JSON responses with error information:
 
 ## License
 
-(Add license information here)
+This project is licensed under the terms in the repository root [`LICENSE`](../../LICENSE) file.

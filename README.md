@@ -1,6 +1,6 @@
 # tasks.technonomicon.net
 
-`tasks.technonomicon.net` is an API-first task management system with a Bootstrap admin UI, API keys, role-aware user management, and automation-friendly SDK/plugin integrations.
+`tasks.technonomicon.net` is an API-first task management system with a Bootstrap admin UI, API keys, role-labeled user management, and automation-friendly SDK/plugin integrations.
 
 ## What the app does (user-facing)
 
@@ -28,14 +28,16 @@
 
 ## Role model
 
-| Role | Purpose | Typical permissions |
+| Role | Purpose | Typical permissions (current implementation) |
 |---|---|---|
 | `admin` | Full system administration | Manage users, keys, statuses, audits |
-| `manager` | Operational management | Same as admin for most API/admin actions |
-| `member` | Standard user | Task operations and own session usage |
-| `api` | API-oriented service identity | API use via key, subject to endpoint auth rules |
+| `manager` | Operational management | Treated as admin-equivalent for most admin checks |
+| `member` | Standard user | Authenticated task/API usage; not strict task ownership isolation |
+| `api` | API-oriented service identity | API use via key, subject to endpoint-level auth checks |
 
 Audit events are captured in `audit_logs` for security-relevant/admin operations.
+
+Current authorization boundaries are coarse-grained: admin-sensitive routes enforce admin/manager checks, but there is not yet a comprehensive task-level ownership/ABAC policy across all task endpoints. Refer to [docs/security.md](docs/security.md) and [docs/api.md](docs/api.md) for endpoint behavior details.
 
 ## Task model
 
