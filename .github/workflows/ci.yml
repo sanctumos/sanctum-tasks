@@ -27,6 +27,7 @@ jobs:
           set -euo pipefail
           python -m pip install --upgrade pip
           python -m pip install requests pytest pytest-cov
+          pip install -r api_python/requirements.txt
 
       - name: PHP syntax lint
         run: |
@@ -38,7 +39,7 @@ jobs:
       - name: Python syntax check
         run: |
           set -euo pipefail
-          python -m py_compile tasks_sdk/*.py smcp_plugin/tasks/*.py
+          find tasks_sdk smcp_plugin/tasks -name '*.py' -exec python -m py_compile {} +
 
       - name: Python import smoke test
         run: |
