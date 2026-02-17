@@ -45,10 +45,10 @@
 ### Getting an API Key
 
 1. Navigate to your tasks admin panel: `https://tasks.technonomicon.net/admin/login.php`
-2. Login with your admin credentials (default: `admin` / `go0dp4ssw0rd`)
-3. The default API key is stored in `db/api_key.txt` on the server
-4. For production, create additional API keys through the admin interface (when implemented)
-5. **Copy the key immediately** - it won't be shown again!
+2. Login with your admin credentials (bootstrap password is configured or generated at first run)
+3. Bootstrap API key may be present in `db/api_key.txt` on the server
+4. Create dedicated API keys through the admin interface
+5. **Copy keys immediately** - full value is shown only at creation time
 
 ## Testing
 

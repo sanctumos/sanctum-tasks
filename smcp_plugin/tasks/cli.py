@@ -41,12 +41,21 @@ def create_task(args: Dict[str, Any], api_key: str) -> Dict[str, Any]:
     """Create a new task."""
     try:
         client = get_client(api_key)
+        tags = args.get("tags")
+        if isinstance(tags, str):
+            tags = [t.strip() for t in tags.split(",") if t.strip()]
         
         task = client.create_task(
             title=args.get("title"),
             status=args.get("status"),
             assigned_to_user_id=args.get("assigned-to-user-id"),
-            body=args.get("body")
+            body=args.get("body"),
+            due_at=args.get("due-at"),
+            priority=args.get("priority"),
+            project=args.get("project"),
+            tags=tags,
+            rank=args.get("rank"),
+            recurrence_rule=args.get("recurrence-rule")
         )
         
         return {
@@ -78,13 +87,24 @@ def update_task(args: Dict[str, Any], api_key: str) -> Dict[str, Any]:
     """Update an existing task."""
     try:
         client = get_client(api_key)
+        tags = args.get("tags")
+        if isinstance(tags, str):
+            tags = [t.strip() for t in tags.split(",") if t.strip()]
         
         task = client.update_task(
             task_id=args.get("task-id"),
             title=args.get("title"),
             status=args.get("status"),
             assigned_to_user_id=args.get("assigned-to-user-id"),
-            body=args.get("body")
+            body=args.get("body"),
+            due_at=args.get("due-at"),
+            priority=args.get("priority"),
+            project=args.get("project"),
+            tags=tags,
+            rank=args.get("rank"),
+            recurrence_rule=args.get("recurrence-rule"),
+            unassign=bool(args.get("unassign", False)),
+            clear_body=bool(args.get("clear-body", False)),
         )
         
         return {
@@ -126,6 +146,11 @@ def list_tasks(args: Dict[str, Any], api_key: str) -> Dict[str, Any]:
         result = client.list_tasks(
             status=args.get("status"),
             assigned_to_user_id=args.get("assigned-to-user-id"),
+            priority=args.get("priority"),
+            project=args.get("project"),
+            q=args.get("q"),
+            sort_by=args.get("sort-by"),
+            sort_dir=args.get("sort-dir"),
             limit=args.get("limit"),
             offset=args.get("offset", 0)
         )
@@ -133,6 +158,8 @@ def list_tasks(args: Dict[str, Any], api_key: str) -> Dict[str, Any]:
         return {
             "status": "success",
             "count": result["count"],
+            "total": result.get("total", result["count"]),
+            "pagination": result.get("pagination"),
             "tasks": result["tasks"]
         }
     except APIError as e:
@@ -239,7 +266,7 @@ def get_plugin_description() -> Dict[str, Any]:
     return {
         "plugin": {
             "name": "tasks",
-            "version": "0.1.0",
+            "version": "0.2.0",
             "description": "Tasks Management API integration for Animus Letta MCP"
         },
         "commands": [
@@ -458,24 +485,43 @@ Examples:
     create_parser = subparsers.add_parser("create-task", help="Create a new task")
     add_api_key_arg(create_parser)
     create_parser.add_argument("--title", required=True, help="Task title")
-    create_parser.add_argument("--status", choices=["todo", "doing", "done"], default="todo", help="Task status")
+    create_parser.add_argument("--status", default="todo", help="Task status slug")
     create_parser.add_argument("--assigned-to-user-id", type=int, dest="assigned_to_user_id", help="User ID to assign task to")
     create_parser.add_argument("--body", help="Task description/details")
+    create_parser.add_argument("--due-at", dest="due_at", help="Due datetime (e.g. 2026-02-17T12:00:00Z)")
+    create_parser.add_argument("--priority", choices=["low", "normal", "high", "urgent"], help="Task priority")
+    create_parser.add_argument("--project", help="Project name")
+    create_parser.add_argument("--tags", help="Comma-separated tags")
+    create_parser.add_argument("--rank", type=int, help="Ordering rank")
+    create_parser.add_argument("--recurrence-rule", dest="recurrence_rule", help="Recurrence rule (RRULE-like)")
     
     # Update task command
     update_parser = subparsers.add_parser("update-task", help="Update an existing task")
     add_api_key_arg(update_parser)
     update_parser.add_argument("--task-id", type=int, required=True, dest="task_id", help="Task ID")
     update_parser.add_argument("--title", help="New title")
-    update_parser.add_argument("--status", choices=["todo", "doing", "done"], help="New status")
+    update_parser.add_argument("--status", help="New status slug")
     update_parser.add_argument("--assigned-to-user-id", type=int, dest="assigned_to_user_id", help="New assigned user ID")
     update_parser.add_argument("--body", help="New body/description (set to empty string to clear)")
+    update_parser.add_argument("--clear-body", action="store_true", dest="clear_body", help="Clear body field")
+    update_parser.add_argument("--unassign", action="store_true", help="Unassign task")
+    update_parser.add_argument("--due-at", dest="due_at", help="Due datetime")
+    update_parser.add_argument("--priority", choices=["low", "normal", "high", "urgent"], help="Task priority")
+    update_parser.add_argument("--project", help="Project name")
+    update_parser.add_argument("--tags", help="Comma-separated tags")
+    update_parser.add_argument("--rank", type=int, help="Ordering rank")
+    update_parser.add_argument("--recurrence-rule", dest="recurrence_rule", help="Recurrence rule (RRULE-like)")
     
     # List tasks command
     list_parser = subparsers.add_parser("list-tasks", help="List tasks")
     add_api_key_arg(list_parser)
-    list_parser.add_argument("--status", choices=["todo", "doing", "done"], help="Filter by status")
+    list_parser.add_argument("--status", help="Filter by status slug")
     list_parser.add_argument("--assigned-to-user-id", type=int, dest="assigned_to_user_id", help="Filter by assigned user ID")
+    list_parser.add_argument("--priority", choices=["low", "normal", "high", "urgent"], help="Filter by priority")
+    list_parser.add_argument("--project", help="Filter by project")
+    list_parser.add_argument("--q", help="Search title/body")
+    list_parser.add_argument("--sort-by", dest="sort_by", help="Sort field")
+    list_parser.add_argument("--sort-dir", dest="sort_dir", choices=["ASC", "DESC", "asc", "desc"], help="Sort direction")
     list_parser.add_argument("--limit", type=int, help="Maximum number of tasks (max: 500, default: 100)")
     list_parser.add_argument("--offset", type=int, default=0, help="Number of tasks to skip")
     

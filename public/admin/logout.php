@@ -6,6 +6,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     exit();
 }
 
+requireCsrfToken();
 logout();
 header('Location: /admin/login.php');
 exit();

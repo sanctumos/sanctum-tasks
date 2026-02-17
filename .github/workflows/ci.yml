@@ -1,0 +1,56 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  lint-and-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.2"
+          extensions: sqlite3
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Python test dependencies
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install requests pytest pytest-cov
+
+      - name: PHP syntax lint
+        run: |
+          set -euo pipefail
+          for file in $(git ls-files '*.php'); do
+            php -l "$file"
+          done
+
+      - name: Python syntax check
+        run: |
+          set -euo pipefail
+          python -m py_compile tasks_sdk/*.py smcp_plugin/tasks/*.py
+
+      - name: Python import smoke test
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from tasks_sdk import TasksClient
+          from smcp_plugin.tasks import __version__ as plugin_version
+          print("TasksClient:", TasksClient.__name__)
+          print("Plugin version:", plugin_version)
+          PY
+
+      - name: Run test suite
+        run: |
+          set -euo pipefail
+          pytest -q

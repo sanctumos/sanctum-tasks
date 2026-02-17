@@ -15,7 +15,7 @@ initializeDatabase();
     <div class="card shadow-sm">
         <div class="card-body">
             <h1 class="h3 mb-3">tasks.technonomicon.net</h1>
-            <p class="mb-4">Internal task management system (API-first) with a minimal admin UI.</p>
+            <p class="mb-4">Internal task management system (API-first) with admin UI, API key automation, and rich task metadata.</p>
             <div class="d-flex gap-2">
                 <a class="btn btn-primary" href="/admin/">Admin UI</a>
                 <a class="btn btn-outline-secondary" href="/api/health.php">API Health</a>
