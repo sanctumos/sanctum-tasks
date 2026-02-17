@@ -85,4 +85,4 @@ The API also returns stable error objects (`error_object`) in responses.
 
 ## License
 
-(Add license information here)
+This project is licensed under the terms in the repository root [`LICENSE`](../LICENSE) file.

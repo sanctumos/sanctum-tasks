@@ -31,7 +31,7 @@ BASE_URL = "https://tasks.technonomicon.net"
 try:
     from smcp_plugin.tasks import __version__ as PLUGIN_VERSION
 except ImportError:  # pragma: no cover - fallback when executed outside package context
-    PLUGIN_VERSION = "0.2.1"
+    PLUGIN_VERSION = "0.2.2"
 DEBUG_TRACEBACKS = False
 
 

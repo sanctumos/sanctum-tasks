@@ -18,8 +18,9 @@ initializeDatabase();
             <p class="mb-4">Internal task management system (API-first) with admin UI, API key automation, and rich task metadata.</p>
             <div class="d-flex gap-2">
                 <a class="btn btn-primary" href="/admin/">Admin UI</a>
-                <a class="btn btn-outline-secondary" href="/api/health.php">API Health</a>
+                <a class="btn btn-outline-secondary" href="/api/health.php">Authenticated API Health</a>
             </div>
+            <p class="text-muted small mt-3 mb-0">The health endpoint requires API key authentication.</p>
         </div>
     </div>
 </div>
