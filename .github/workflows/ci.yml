@@ -15,11 +15,18 @@ jobs:
         uses: shivammathur/setup-php@v2
         with:
           php-version: "8.2"
+          extensions: sqlite3
 
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+
+      - name: Install Python test dependencies
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install -e './tasks_sdk[dev]'
 
       - name: PHP syntax lint
         run: |
@@ -42,3 +49,8 @@ jobs:
           print("TasksClient:", TasksClient.__name__)
           print("Plugin version:", plugin_version)
           PY
+
+      - name: Run test suite
+        run: |
+          set -euo pipefail
+          pytest -q
