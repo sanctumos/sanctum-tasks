@@ -5,13 +5,14 @@ $user = requireApiUser();
 
 $id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
 if ($id <= 0) {
-    jsonResponse(['success' => false, 'error' => 'Missing or invalid id'], 400);
+    apiError('validation.invalid_id', 'Missing or invalid id', 400);
 }
 
-$task = getTaskById($id);
+$includeRelations = !isset($_GET['include_relations']) || $_GET['include_relations'] !== '0';
+$task = getTaskById($id, $includeRelations);
 if (!$task) {
-    jsonResponse(['success' => false, 'error' => 'Task not found'], 404);
+    apiError('task.not_found', 'Task not found', 404);
 }
 
-jsonResponse(['success' => true, 'task' => $task]);
+apiSuccess(['task' => $task]);
 

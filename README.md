@@ -1,19 +1,104 @@
 # tasks.technonomicon.net
 
-Task management application for Technonomicon.
+`tasks.technonomicon.net` is an API-first task management system with a Bootstrap admin UI, API keys, role-aware user management, and automation-friendly SDK/plugin integrations.
 
-## Repository Structure
+## What the app does (user-facing)
 
-This repository follows the multi-tenant LEMP stack deployment structure:
+### Core workflows
 
-- `public/` - All web-accessible files (HTML, PHP, CSS, JS, images)
-- `db/` - Database files (SQLite)
-- `docs/` - Documentation (not deployed)
+1. **Admin login**
+   - Sign in at `/admin/login.php`
+   - Supports optional MFA (TOTP) and account lockout after repeated failures
+   - Users can be required to rotate password on first login/reset
 
-## Setup
+2. **Task operations**
+   - Create, update, view, and delete tasks from `/admin/`
+   - Filter/search/sort by status, assignee, priority, project, due date, and free-text query
+   - Task model includes richer metadata (see below)
 
-See [docs/github-repository-setup-guide.md](docs/github-repository-setup-guide.md) for detailed setup instructions.
+3. **User and access management**
+   - `/admin/users.php` supports create/disable/reset-password
+   - `/admin/api-keys.php` supports API key lifecycle for integrations
+   - `/admin/mfa.php` supports per-user TOTP MFA setup/disable
 
-## Development
+4. **Automation + integrations**
+   - HTTP JSON API under `/api/*`
+   - Python SDK under `tasks_sdk/`
+   - SMCP plugin under `smcp_plugin/tasks/`
 
-This project will be deployed automatically when changes are pushed to the main branch.
+## Role model
+
+| Role | Purpose | Typical permissions |
+|---|---|---|
+| `admin` | Full system administration | Manage users, keys, statuses, audits |
+| `manager` | Operational management | Same as admin for most API/admin actions |
+| `member` | Standard user | Task operations and own session usage |
+| `api` | API-oriented service identity | API use via key, subject to endpoint auth rules |
+
+Audit events are captured in `audit_logs` for security-relevant/admin operations.
+
+## Task model
+
+Task records support:
+
+- Identity & ownership: `id`, `created_by_user_id`, `assigned_to_user_id`
+- Content: `title`, `body`
+- Workflow: `status` (customizable via `task_statuses`)
+- Scheduling: `due_at`, `recurrence_rule`
+- Prioritization: `priority`, `rank`
+- Organization: `project`, `tags`
+- Collaboration:
+  - comments (`task_comments`)
+  - attachments metadata (`task_attachments`)
+  - watchers/subscribers (`task_watchers`)
+- Timestamps: `created_at`, `updated_at`
+
+## API overview
+
+- Auth: `X-API-Key: <token>` or `Authorization: Bearer <token>`
+- Rate limits: response headers (`X-RateLimit-*`) + `429` on limit exceeded
+- Error schema:
+  - legacy key: `error`
+  - stable object: `error_object = { code, message, details }`
+- Pagination metadata/links included on list/search endpoints
+
+Full endpoint reference: [docs/api.md](docs/api.md)
+
+## Repository structure
+
+- `public/` - web-accessible PHP/UI/API code
+- `db/` - SQLite database files and runtime secrets (ignored in git)
+- `docs/` - architecture, API, integration, and operational docs
+- `tasks_sdk/` - Python SDK
+- `smcp_plugin/tasks/` - SMCP CLI plugin
+
+## Local development quick start
+
+```bash
+# 1) Install PHP and Python dependencies as needed (system package manager)
+# 2) Copy optional secret template (recommended)
+cp public/includes/secrets.php.example public/includes/secrets.php
+
+# 3) Start local PHP server from repo root
+php -S 127.0.0.1:8080 -t public
+
+# 4) Open admin UI
+# http://127.0.0.1:8080/admin/login.php
+```
+
+Bootstrap credentials/key are created at first run:
+
+- Admin username defaults to `admin` unless overridden by env
+- Admin password is either:
+  - `TASKS_BOOTSTRAP_ADMIN_PASSWORD`, or
+  - generated and stored in `db/bootstrap_admin_password.txt`
+- Bootstrap API key is either:
+  - `TASKS_BOOTSTRAP_API_KEY`, or
+  - generated and stored in `db/api_key.txt`
+
+## Documentation index
+
+- API: [docs/api.md](docs/api.md)
+- Development, schema/migrations, backups, CI/testing: [docs/development.md](docs/development.md)
+- Integration walkthrough (admin -> API key -> SDK/plugin): [docs/integrations.md](docs/integrations.md)
+- Deployment structure: [docs/github-repository-setup-guide.md](docs/github-repository-setup-guide.md)

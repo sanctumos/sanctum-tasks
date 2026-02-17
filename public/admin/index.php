@@ -7,14 +7,27 @@ $currentUser = getCurrentUser();
 
 $status = $_GET['status'] ?? '';
 $assignedToUserId = $_GET['assigned_to_user_id'] ?? '';
+$priority = $_GET['priority'] ?? '';
+$project = $_GET['project'] ?? '';
+$q = $_GET['q'] ?? '';
+$sortBy = $_GET['sort_by'] ?? 'updated_at';
+$sortDir = strtoupper($_GET['sort_dir'] ?? 'DESC') === 'ASC' ? 'ASC' : 'DESC';
 
-$users = listUsers();
-$tasks = listTasks([
+$statuses = listTaskStatuses();
+$users = listUsers(false);
+$tasksResult = listTasks([
     'status' => $status ?: null,
     'assigned_to_user_id' => $assignedToUserId,
-    'limit' => 200,
+    'priority' => $priority ?: null,
+    'project' => $project ?: null,
+    'q' => $q ?: null,
+    'sort_by' => $sortBy,
+    'sort_dir' => $sortDir,
+    'limit' => 250,
     'offset' => 0,
-]);
+], true);
+$tasks = $tasksResult['tasks'];
+$projects = listProjects(200);
 
 require __DIR__ . '/_layout_top.php';
 ?>
@@ -31,9 +44,11 @@ require __DIR__ . '/_layout_top.php';
                 <label class="form-label">Status</label>
                 <select class="form-select" name="status">
                     <option value="" <?= $status === '' ? 'selected' : '' ?>>All</option>
-                    <option value="todo" <?= $status === 'todo' ? 'selected' : '' ?>>todo</option>
-                    <option value="doing" <?= $status === 'doing' ? 'selected' : '' ?>>doing</option>
-                    <option value="done" <?= $status === 'done' ? 'selected' : '' ?>>done</option>
+                    <?php foreach ($statuses as $s): ?>
+                        <option value="<?= htmlspecialchars($s['slug']) ?>" <?= $status === $s['slug'] ? 'selected' : '' ?>>
+                            <?= htmlspecialchars($s['label']) ?> (<?= htmlspecialchars($s['slug']) ?>)
+                        </option>
+                    <?php endforeach; ?>
                 </select>
             </div>
             <div class="col-md-4">
@@ -45,6 +60,43 @@ require __DIR__ . '/_layout_top.php';
                             <?= htmlspecialchars($u['username']) ?> (<?= (int)$u['id'] ?>)
                         </option>
                     <?php endforeach; ?>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Priority</label>
+                <select class="form-select" name="priority">
+                    <option value="" <?= $priority === '' ? 'selected' : '' ?>>Any</option>
+                    <?php foreach (['low', 'normal', 'high', 'urgent'] as $p): ?>
+                        <option value="<?= $p ?>" <?= $priority === $p ? 'selected' : '' ?>><?= $p ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Project</label>
+                <input class="form-control" name="project" value="<?= htmlspecialchars($project) ?>" list="projects-list" placeholder="Project name">
+                <datalist id="projects-list">
+                    <?php foreach ($projects as $proj): ?>
+                        <option value="<?= htmlspecialchars($proj['name']) ?>"></option>
+                    <?php endforeach; ?>
+                </datalist>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">Search</label>
+                <input class="form-control" name="q" value="<?= htmlspecialchars($q) ?>" placeholder="Title or body...">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Sort by</label>
+                <select class="form-select" name="sort_by">
+                    <?php foreach (['updated_at', 'created_at', 'due_at', 'priority', 'rank', 'status', 'title'] as $opt): ?>
+                        <option value="<?= $opt ?>" <?= $sortBy === $opt ? 'selected' : '' ?>><?= $opt ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <div class="col-md-1">
+                <label class="form-label">Dir</label>
+                <select class="form-select" name="sort_dir">
+                    <option value="DESC" <?= $sortDir === 'DESC' ? 'selected' : '' ?>>DESC</option>
+                    <option value="ASC" <?= $sortDir === 'ASC' ? 'selected' : '' ?>>ASC</option>
                 </select>
             </div>
             <div class="col-md-3 d-flex align-items-end gap-2">
@@ -59,20 +111,23 @@ require __DIR__ . '/_layout_top.php';
     <div class="card-body">
         <h2 class="h5 mb-3">Create task</h2>
         <form method="post" action="/admin/create.php">
+            <?= csrfInputField() ?>
             <div class="row g-2 mb-2">
-                <div class="col-md-6">
+                <div class="col-md-5">
                     <label class="form-label">Title</label>
                     <input class="form-control" name="title" required>
                 </div>
                 <div class="col-md-2">
                     <label class="form-label">Status</label>
                     <select class="form-select" name="status">
-                        <option value="todo">todo</option>
-                        <option value="doing">doing</option>
-                        <option value="done">done</option>
+                        <?php foreach ($statuses as $s): ?>
+                            <option value="<?= htmlspecialchars($s['slug']) ?>" <?= ((int)$s['is_default'] === 1) ? 'selected' : '' ?>>
+                                <?= htmlspecialchars($s['slug']) ?>
+                            </option>
+                        <?php endforeach; ?>
                     </select>
                 </div>
-                <div class="col-md-4">
+                <div class="col-md-3">
                     <label class="form-label">Assign to</label>
                     <select class="form-select" name="assigned_to_user_id">
                         <option value="">Unassigned</option>
@@ -81,6 +136,37 @@ require __DIR__ . '/_layout_top.php';
                         <?php endforeach; ?>
                     </select>
                 </div>
+                <div class="col-md-2">
+                    <label class="form-label">Priority</label>
+                    <select class="form-select" name="priority">
+                        <option value="low">low</option>
+                        <option value="normal" selected>normal</option>
+                        <option value="high">high</option>
+                        <option value="urgent">urgent</option>
+                    </select>
+                </div>
+            </div>
+            <div class="row g-2 mb-2">
+                <div class="col-md-3">
+                    <label class="form-label">Due at (UTC)</label>
+                    <input class="form-control" name="due_at" type="datetime-local">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Project</label>
+                    <input class="form-control" name="project" placeholder="e.g. Platform">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Rank</label>
+                    <input class="form-control" name="rank" type="number" value="0">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Tags (comma-separated)</label>
+                    <input class="form-control" name="tags" placeholder="backend,urgent,infra">
+                </div>
+            </div>
+            <div class="mb-2">
+                <label class="form-label">Recurrence rule (optional)</label>
+                <input class="form-control" name="recurrence_rule" placeholder="FREQ=WEEKLY;BYDAY=MO,WE,FR">
             </div>
             <div class="mb-2">
                 <label class="form-label">Body</label>
@@ -95,7 +181,7 @@ require __DIR__ . '/_layout_top.php';
 
 <div class="card shadow-sm">
     <div class="card-body">
-        <h2 class="h5 mb-3">Task list (<?= count($tasks) ?>)</h2>
+        <h2 class="h5 mb-3">Task list (<?= count($tasks) ?> / total <?= (int)$tasksResult['total'] ?>)</h2>
         <div class="table-responsive">
             <table class="table table-sm align-middle">
                 <thead>
@@ -103,8 +189,13 @@ require __DIR__ . '/_layout_top.php';
                     <th>ID</th>
                     <th>Title</th>
                     <th>Status</th>
+                    <th>Priority</th>
+                    <th>Due</th>
+                    <th>Project</th>
+                    <th>Rank</th>
                     <th>Created by</th>
                     <th>Assigned to</th>
+                    <th>Signals</th>
                     <th>Updated</th>
                     <th class="text-end">Actions</th>
                 </tr>
@@ -116,18 +207,37 @@ require __DIR__ . '/_layout_top.php';
                         <td><?= htmlspecialchars($t['title']) ?></td>
                         <td>
                             <form method="post" action="/admin/update.php" class="d-flex gap-2">
+                                <?= csrfInputField() ?>
                                 <input type="hidden" name="id" value="<?= (int)$t['id'] ?>">
                                 <select class="form-select form-select-sm" name="status" style="width: 120px;">
-                                    <option value="todo" <?= $t['status'] === 'todo' ? 'selected' : '' ?>>todo</option>
-                                    <option value="doing" <?= $t['status'] === 'doing' ? 'selected' : '' ?>>doing</option>
-                                    <option value="done" <?= $t['status'] === 'done' ? 'selected' : '' ?>>done</option>
+                                    <?php foreach ($statuses as $s): ?>
+                                        <option value="<?= htmlspecialchars($s['slug']) ?>" <?= $t['status'] === $s['slug'] ? 'selected' : '' ?>>
+                                            <?= htmlspecialchars($s['slug']) ?>
+                                        </option>
+                                    <?php endforeach; ?>
                                 </select>
                                 <button class="btn btn-sm btn-outline-primary" type="submit">Save</button>
                             </form>
                         </td>
+                        <td>
+                            <form method="post" action="/admin/update.php" class="d-flex gap-2">
+                                <?= csrfInputField() ?>
+                                <input type="hidden" name="id" value="<?= (int)$t['id'] ?>">
+                                <select class="form-select form-select-sm" name="priority" style="width: 110px;">
+                                    <?php foreach (['low', 'normal', 'high', 'urgent'] as $p): ?>
+                                        <option value="<?= $p ?>" <?= ($t['priority'] ?? 'normal') === $p ? 'selected' : '' ?>><?= $p ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                                <button class="btn btn-sm btn-outline-primary" type="submit">Save</button>
+                            </form>
+                        </td>
+                        <td class="small"><?= htmlspecialchars((string)($t['due_at'] ?? '')) ?></td>
+                        <td class="small"><?= htmlspecialchars((string)($t['project'] ?? '')) ?></td>
+                        <td class="small"><?= (int)($t['rank'] ?? 0) ?></td>
                         <td><?= htmlspecialchars($t['created_by_username'] ?? '') ?> (<?= (int)$t['created_by_user_id'] ?>)</td>
                         <td>
                             <form method="post" action="/admin/update.php" class="d-flex gap-2">
+                                <?= csrfInputField() ?>
                                 <input type="hidden" name="id" value="<?= (int)$t['id'] ?>">
                                 <select class="form-select form-select-sm" name="assigned_to_user_id" style="width: 180px;">
                                     <option value="">Unassigned</option>
@@ -140,10 +250,16 @@ require __DIR__ . '/_layout_top.php';
                                 <button class="btn btn-sm btn-outline-primary" type="submit">Save</button>
                             </form>
                         </td>
+                        <td class="small text-muted">
+                            C <?= (int)($t['comment_count'] ?? 0) ?> /
+                            A <?= (int)($t['attachment_count'] ?? 0) ?> /
+                            W <?= (int)($t['watcher_count'] ?? 0) ?>
+                        </td>
                         <td class="text-muted small"><?= htmlspecialchars($t['updated_at']) ?></td>
                         <td class="text-end">
                             <a class="btn btn-sm btn-outline-primary" href="/admin/view.php?id=<?= (int)$t['id'] ?>">View</a>
                             <form method="post" action="/admin/delete.php" class="d-inline" onsubmit="return confirm('Delete task #<?= (int)$t['id'] ?>?');">
+                                <?= csrfInputField() ?>
                                 <input type="hidden" name="id" value="<?= (int)$t['id'] ?>">
                                 <button class="btn btn-sm btn-outline-danger" type="submit">Delete</button>
                             </form>
@@ -151,7 +267,7 @@ require __DIR__ . '/_layout_top.php';
                     </tr>
                 <?php endforeach; ?>
                 <?php if (empty($tasks)): ?>
-                    <tr><td colspan="7" class="text-muted">No tasks found.</td></tr>
+                    <tr><td colspan="12" class="text-muted">No tasks found.</td></tr>
                 <?php endif; ?>
                 </tbody>
             </table>

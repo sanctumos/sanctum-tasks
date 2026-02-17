@@ -34,8 +34,14 @@ Create a new task.
 
 **Parameters:**
 - `--title` (required): Task title
-- `--status` (optional): Task status: 'todo', 'doing', or 'done' (default: 'todo')
+- `--status` (optional): Task status slug (default: `todo`)
 - `--assigned-to-user-id` (optional): User ID to assign task to
+- `--priority` (optional): `low|normal|high|urgent`
+- `--project` (optional): Project name
+- `--tags` (optional): Comma-separated tags
+- `--due-at` (optional): Due datetime (ISO-ish)
+- `--rank` (optional): Ordering rank
+- `--recurrence-rule` (optional): Recurrence rule string
 
 **Example:**
 ```bash
@@ -53,8 +59,12 @@ Update an existing task.
 **Parameters:**
 - `--task-id` (required): Task ID
 - `--title` (optional): New title
-- `--status` (optional): New status: 'todo', 'doing', or 'done'
+- `--status` (optional): New status slug
 - `--assigned-to-user-id` (optional): New assigned user ID (set to null to unassign)
+- `--unassign` (optional): Explicitly clear assignee
+- `--body` (optional): New task description/details
+- `--clear-body` (optional): Clear task body
+- `--priority`, `--project`, `--tags`, `--due-at`, `--rank`, `--recurrence-rule` (optional metadata updates)
 
 **Example:**
 ```bash
@@ -70,8 +80,12 @@ python cli.py update-task \
 List tasks with optional filtering and pagination.
 
 **Parameters:**
-- `--status` (optional): Filter by status: 'todo', 'doing', or 'done'
+- `--status` (optional): Filter by status slug
 - `--assigned-to-user-id` (optional): Filter by assigned user ID
+- `--priority` (optional): Filter by priority
+- `--project` (optional): Filter by project
+- `--q` (optional): Full-text search in title/body
+- `--sort-by` / `--sort-dir` (optional): Sort controls
 - `--limit` (optional): Maximum number of tasks to return (max: 500, default: 100)
 - `--offset` (optional): Number of tasks to skip (default: 0)
 

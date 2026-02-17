@@ -2,16 +2,17 @@
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/functions.php';
 
-requireAuth();
+requireAdmin();
 $currentUser = getCurrentUser();
 
 // Handle create API key
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'create') {
+    requireCsrfToken();
     $keyName = trim($_POST['key_name'] ?? 'Unnamed Key');
     if ($keyName === '') {
         $keyName = 'Unnamed Key';
     }
-    $apiKey = createApiKeyForUser($currentUser['id'], $keyName);
+    $apiKey = createApiKeyForUser((int)$currentUser['id'], $keyName, (int)$currentUser['id']);
     $message = "API key created successfully!";
     $messageType = 'success';
     $newApiKey = $apiKey; // Store for display
@@ -19,8 +20,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 
 // Handle delete API key
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'delete') {
+    requireCsrfToken();
     if (isset($_POST['id'])) {
-        deleteApiKey($_POST['id']);
+        revokeApiKey((int)$_POST['id']);
         $message = "API key deleted successfully";
         $messageType = 'success';
     }
@@ -55,6 +57,7 @@ require __DIR__ . '/_layout_top.php';
     <div class="card-body">
         <h2 class="h5 mb-3">Create New API Key</h2>
         <form method="POST">
+            <?= csrfInputField() ?>
             <input type="hidden" name="action" value="create">
             <div class="row g-2">
                 <div class="col-md-8">
@@ -101,6 +104,7 @@ require __DIR__ . '/_layout_top.php';
                             </td>
                             <td class="text-end">
                                 <form method="POST" class="d-inline" onsubmit="return confirm('Delete this API key? This cannot be undone.');">
+                                    <?= csrfInputField() ?>
                                     <input type="hidden" name="action" value="delete">
                                     <input type="hidden" name="id" value="<?= (int)$key['id'] ?>">
                                     <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>

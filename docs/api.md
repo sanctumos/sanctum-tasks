@@ -1,111 +1,197 @@
 # tasks.technonomicon.net API (v1)
 
-## Auth
+## Authentication
 
-All `/api/*` endpoints require:
+Most `/api/*` endpoints require an API key via either:
 
-- Header: `X-API-Key: <token>`
+- `X-API-Key: <token>`
+- `Authorization: Bearer <token>`
 
-Each API key maps to a **user** in the `users` table.
+Session endpoints (`session-login.php`, `session-me.php`, `session-logout.php`) use cookie-based admin/web sessions instead.
 
-## Task fields
+## Response and error schema
+
+### Success
+
+Success payloads include:
+
+- `success: true`
+- endpoint-specific fields (for compatibility, e.g. `task`, `tasks`, `count`)
+- `data` mirror of endpoint-specific payload
+- optional `meta` object
+
+### Error
+
+Errors include both:
+
+- legacy string: `error`
+- stable object: `error_object`
+
+Example:
+
+```json
+{
+  "success": false,
+  "error": "Invalid or missing API key",
+  "error_object": {
+    "code": "auth.invalid_api_key",
+    "message": "Invalid or missing API key",
+    "details": {}
+  }
+}
+```
+
+## Rate limiting
+
+API-key endpoints enforce fixed-window rate limiting.
+
+Response headers:
+
+- `X-RateLimit-Limit`
+- `X-RateLimit-Remaining`
+- `X-RateLimit-Reset` (unix epoch)
+
+On limit exceeded:
+
+- HTTP `429`
+- `Retry-After` header
+- error code `rate_limited`
+
+## Task model
+
+Task fields:
 
 - `id` (int)
 - `title` (string)
-- `body` (string|null): Task description/details
-- `status` (string): `todo` | `doing` | `done`
+- `body` (string|null)
+- `status` (string slug; customizable)
+- `due_at` (UTC datetime|null)
+- `priority` (`low|normal|high|urgent`)
+- `project` (string|null)
+- `tags` (array of strings)
+- `rank` (int)
+- `recurrence_rule` (string|null)
 - `created_by_user_id` (int)
 - `assigned_to_user_id` (int|null)
-- `created_at` (string)
-- `updated_at` (string)
+- `created_at` (UTC datetime)
+- `updated_at` (UTC datetime)
+- `comment_count`, `attachment_count`, `watcher_count` (ints)
 
-Server-returned convenience fields:
-- `created_by_username` (string)
-- `assigned_to_username` (string|null)
+Convenience fields:
 
-## Endpoints
+- `created_by_username`
+- `assigned_to_username`
+- `status_label`, `status_sort_order`, `status_is_done`
 
-### GET `/api/health.php`
+## Endpoint reference
 
-Returns authenticated user info.
+## Health
 
-```bash
-curl -sS -H "X-API-Key: $TASKS_API_KEY" https://tasks.technonomicon.net/api/health.php
-```
+- `GET /api/health.php`
 
-### GET `/api/list-tasks.php`
+## Tasks
 
-Query params:
-- `status` (optional): `todo|doing|done`
-- `assigned_to_user_id` (optional): integer
-- `limit` (optional): integer (max 500; default 100)
-- `offset` (optional): integer (default 0)
+- `GET /api/list-tasks.php`
+  - filters: `status`, `assigned_to_user_id`, `created_by_user_id`, `priority`, `project`, `q`, `due_before`, `due_after`, `watcher_user_id`
+  - sorting: `sort_by`, `sort_dir`
+  - pagination: `limit`, `offset`
+  - returns `pagination` object with `next_url`/`prev_url`
+- `GET /api/get-task.php?id=<id>&include_relations=1`
+- `POST /api/create-task.php`
+  - fields: `title` required, plus task model write fields
+- `POST /api/update-task.php`
+  - fields: `id` required, any task model write fields
+- `POST /api/delete-task.php`
+  - fields: `id`
+- `GET /api/search-tasks.php?q=<query>`
 
-```bash
-curl -sS -H "X-API-Key: $TASKS_API_KEY" "https://tasks.technonomicon.net/api/list-tasks.php?status=todo&limit=50"
-```
+## Bulk operations
 
-### GET `/api/get-task.php?id=<id>`
+- `POST /api/bulk-create-tasks.php`
+  - body: `{ "tasks": [ ... ] }`, max 100
+- `POST /api/bulk-update-tasks.php`
+  - body: `{ "updates": [ ... ] }`, max 100
 
-```bash
-curl -sS -H "X-API-Key: $TASKS_API_KEY" "https://tasks.technonomicon.net/api/get-task.php?id=123"
-```
+## Status workflow
 
-### POST `/api/create-task.php`
+- `GET /api/list-statuses.php`
+- `POST /api/create-status.php` (admin)
 
-JSON body:
-- `title` (required)
-- `body` (optional; nullable): Task description/details
-- `status` (optional)
-- `assigned_to_user_id` (optional; nullable)
+## Collaboration
 
-Notes:
-- `created_by_user_id` is set automatically from the API key's mapped user.
+- comments:
+  - `GET /api/list-comments.php?task_id=<id>`
+  - `POST /api/create-comment.php`
+- attachments (metadata URLs):
+  - `GET /api/list-attachments.php?task_id=<id>`
+  - `POST /api/add-attachment.php`
+- watchers/subscribers:
+  - `GET /api/list-watchers.php?task_id=<id>`
+  - `POST /api/watch-task.php`
+  - `POST /api/unwatch-task.php`
+
+## Taxonomy helpers
+
+- `GET /api/list-projects.php`
+- `GET /api/list-tags.php`
+
+## Users (admin)
+
+- `GET /api/list-users.php`
+- `POST /api/create-user.php`
+- `POST /api/disable-user.php` (`is_active` controls enable/disable)
+- `POST /api/reset-user-password.php`
+
+## API key lifecycle
+
+- `GET /api/list-api-keys.php`
+- `POST /api/create-api-key.php`
+- `POST /api/revoke-api-key.php`
+
+## Session/auth endpoints (cookie-based)
+
+- `POST /api/session-login.php` (`username`, `password`, optional `mfa_code`)
+- `GET /api/session-me.php`
+- `POST /api/session-logout.php` (requires CSRF token when logged in)
+
+## Auditing
+
+- `GET /api/list-audit-logs.php` (admin)
+
+## Quick examples
+
+### Create task with metadata
 
 ```bash
 curl -sS -X POST \
   -H "X-API-Key: $TASKS_API_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"title":"Investigate deployment error","body":"Check logs and deployment status","status":"todo","assigned_to_user_id":1}' \
+  -d '{
+    "title":"Investigate deployment error",
+    "body":"Check logs and deployment status",
+    "status":"todo",
+    "priority":"high",
+    "project":"Platform",
+    "tags":["infra","release"],
+    "due_at":"2026-02-20T16:00:00Z",
+    "rank":10
+  }' \
   https://tasks.technonomicon.net/api/create-task.php
 ```
 
-### POST `/api/update-task.php`
+### Search tasks
 
-JSON body:
-- `id` (required)
-- `title` (optional)
-- `body` (optional; nullable; set to `null` or empty string to clear)
-- `status` (optional)
-- `assigned_to_user_id` (optional; set to `null` to unassign)
+```bash
+curl -sS -H "X-API-Key: $TASKS_API_KEY" \
+  "https://tasks.technonomicon.net/api/search-tasks.php?q=deployment&limit=20"
+```
+
+### Bulk update
 
 ```bash
 curl -sS -X POST \
   -H "X-API-Key: $TASKS_API_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"id":123,"status":"done"}' \
-  https://tasks.technonomicon.net/api/update-task.php
+  -d '{"updates":[{"id":101,"status":"doing"},{"id":102,"priority":"urgent"}]}' \
+  https://tasks.technonomicon.net/api/bulk-update-tasks.php
 ```
-
-### POST `/api/delete-task.php`
-
-JSON body:
-- `id` (required)
-
-```bash
-curl -sS -X POST \
-  -H "X-API-Key: $TASKS_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"id":123}' \
-  https://tasks.technonomicon.net/api/delete-task.php
-```
-
-## Default admin user
-
-On first run, the database initialization creates:
-
-- Username: `admin`
-- Password: `go0dp4ssw0rd`
-
-Change this as soon as practical.
-

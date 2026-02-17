@@ -15,9 +15,15 @@ require_once __DIR__ . '/../includes/auth.php';
         <a class="navbar-brand" href="/admin/">Tasks Admin</a>
         <div class="d-flex gap-2">
             <?php if (isLoggedIn()): ?>
-                <a class="btn btn-sm btn-outline-light" href="/admin/api-keys.php">API Keys</a>
+                <?php if (isAdminRole((string)($_SESSION['role'] ?? ''))): ?>
+                    <a class="btn btn-sm btn-outline-light" href="/admin/users.php">Users</a>
+                    <a class="btn btn-sm btn-outline-light" href="/admin/api-keys.php">API Keys</a>
+                <?php endif; ?>
+                <a class="btn btn-sm btn-outline-light" href="/admin/mfa.php">MFA</a>
+                <a class="btn btn-sm btn-outline-light" href="/admin/change-password.php">Change Password</a>
                 <span class="navbar-text text-white-50">Signed in as <?= htmlspecialchars($_SESSION['username'] ?? '') ?></span>
                 <form method="post" action="/admin/logout.php" class="m-0">
+                    <?= csrfInputField() ?>
                     <button class="btn btn-sm btn-outline-light" type="submit">Logout</button>
                 </form>
             <?php else: ?>

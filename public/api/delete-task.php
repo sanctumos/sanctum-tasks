@@ -3,22 +3,26 @@ require_once __DIR__ . '/../includes/api_auth.php';
 
 $user = requireApiUser();
 
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    apiError('method.not_allowed', 'Use POST for this endpoint', 405);
+}
+
 $body = readJsonBody();
 if ($body === null) {
-    jsonResponse(['success' => false, 'error' => 'Invalid JSON body'], 400);
+    apiError('validation.invalid_json', 'Invalid JSON body', 400);
 }
 
 $id = isset($body['id']) ? (int)$body['id'] : 0;
 if ($id <= 0) {
-    jsonResponse(['success' => false, 'error' => 'Missing or invalid id'], 400);
+    apiError('validation.invalid_id', 'Missing or invalid id', 400);
 }
 
 $existing = getTaskById($id);
 if (!$existing) {
-    jsonResponse(['success' => false, 'error' => 'Task not found'], 404);
+    apiError('task.not_found', 'Task not found', 404);
 }
 
-deleteTask($id);
+deleteTask((int)$id);
 
-jsonResponse(['success' => true]);
+apiSuccess(['deleted' => true]);
 

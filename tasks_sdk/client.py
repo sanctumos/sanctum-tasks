@@ -5,8 +5,7 @@ Main client class for interacting with tasks.technonomicon.net API.
 """
 
 import json
-from typing import Optional, List, Dict, Any
-from urllib.parse import urlencode
+from typing import Optional, Dict, Any, List
 import requests
 
 from .exceptions import (
@@ -56,7 +55,7 @@ class TasksClient:
         method: str,
         endpoint: str,
         params: Optional[Dict[str, Any]] = None,
-        data: Optional[Dict[str, Any]] = None
+        data: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """
         Make an HTTP request to the API.
@@ -79,51 +78,61 @@ class TasksClient:
         url = f"{self.api_base}/{endpoint}"
         
         try:
-            response = self.session.request(
-                method=method,
-                url=url,
-                params=params,
-                json=data,
-                timeout=30
-            )
+            response = self.session.request(method=method, url=url, params=params, json=data, timeout=30)
         except requests.exceptions.RequestException as e:
             raise APIError(f"Request failed: {str(e)}")
-        
+
         # Parse response
         try:
             response_data = response.json()
         except json.JSONDecodeError:
             raise APIError(f"Invalid JSON response: {response.text[:200]}")
-        
+
+        error_obj = response_data.get("error_object") if isinstance(response_data, dict) else None
+        error_msg = (
+            response_data.get("error")
+            if isinstance(response_data, dict)
+            else None
+        ) or (
+            error_obj.get("message")
+            if isinstance(error_obj, dict)
+            else None
+        ) or f"API error: {response.status_code}"
+
         # Handle errors
         if response.status_code == 401:
             raise AuthenticationError(
-                response_data.get('error', 'Authentication failed'),
+                error_msg,
                 status_code=401,
-                response=response_data
+                response=response_data,
             )
         elif response.status_code == 404:
             raise NotFoundError(
-                response_data.get('error', 'Resource not found'),
+                error_msg,
                 status_code=404,
-                response=response_data
+                response=response_data,
             )
-        elif response.status_code == 400:
+        elif response.status_code in (400, 405, 422):
             raise ValidationError(
-                response_data.get('error', 'Validation failed'),
-                status_code=400,
-                response=response_data
+                error_msg,
+                status_code=response.status_code,
+                response=response_data,
+            )
+        elif response.status_code == 429:
+            raise APIError(
+                error_msg,
+                status_code=429,
+                response=response_data,
             )
         elif not response.ok:
-            error_msg = response_data.get('error', f'API error: {response.status_code}')
             raise APIError(
                 error_msg,
                 status_code=response.status_code,
-                response=response_data
+                response=response_data,
             )
-        
+
         return response_data
-    
+
     def health(self) -> Dict[str, Any]:
         """
         Check API health and get authenticated user info.
@@ -137,13 +146,19 @@ class TasksClient:
             'admin'
         """
         return self._request('GET', 'health.php')
-    
+
     def create_task(
         self,
         title: str,
         status: Optional[str] = None,
         assigned_to_user_id: Optional[int] = None,
-        body: Optional[str] = None
+        body: Optional[str] = None,
+        due_at: Optional[str] = None,
+        priority: Optional[str] = None,
+        project: Optional[str] = None,
+        tags: Optional[List[str]] = None,
+        rank: Optional[int] = None,
+        recurrence_rule: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Create a new task.
@@ -167,27 +182,45 @@ class TasksClient:
             >>> print(task['id'])
             123
         """
-        data = {
-            'title': title,
-        }
-        
+        data = {'title': title}
+
         if status:
             data['status'] = status
         if assigned_to_user_id is not None:
             data['assigned_to_user_id'] = assigned_to_user_id
         if body is not None:
             data['body'] = body
-        
+        if due_at is not None:
+            data['due_at'] = due_at
+        if priority is not None:
+            data['priority'] = priority
+        if project is not None:
+            data['project'] = project
+        if tags is not None:
+            data['tags'] = tags
+        if rank is not None:
+            data['rank'] = rank
+        if recurrence_rule is not None:
+            data['recurrence_rule'] = recurrence_rule
+
         response = self._request('POST', 'create-task.php', data=data)
         return response['task']
-    
+
     def update_task(
         self,
         task_id: int,
         title: Optional[str] = None,
         status: Optional[str] = None,
         assigned_to_user_id: Optional[int] = None,
-        body: Optional[str] = None
+        body: Optional[str] = None,
+        due_at: Optional[str] = None,
+        priority: Optional[str] = None,
+        project: Optional[str] = None,
+        tags: Optional[List[str]] = None,
+        rank: Optional[int] = None,
+        recurrence_rule: Optional[str] = None,
+        unassign: bool = False,
+        clear_body: bool = False,
     ) -> Dict[str, Any]:
         """
         Update an existing task.
@@ -211,20 +244,36 @@ class TasksClient:
             ... )
         """
         data = {'id': task_id}
-        
+
         if title is not None:
             data['title'] = title
         if status is not None:
             data['status'] = status
-        if assigned_to_user_id is not None:
+        if unassign:
+            data['assigned_to_user_id'] = None
+        elif assigned_to_user_id is not None:
             data['assigned_to_user_id'] = assigned_to_user_id
-        if body is not None:
+        if clear_body:
+            data['body'] = None
+        elif body is not None:
             data['body'] = body
-        
+        if due_at is not None:
+            data['due_at'] = due_at
+        if priority is not None:
+            data['priority'] = priority
+        if project is not None:
+            data['project'] = project
+        if tags is not None:
+            data['tags'] = tags
+        if rank is not None:
+            data['rank'] = rank
+        if recurrence_rule is not None:
+            data['recurrence_rule'] = recurrence_rule
+
         response = self._request('POST', 'update-task.php', data=data)
         return response['task']
-    
-    def get_task(self, task_id: int) -> Dict[str, Any]:
+
+    def get_task(self, task_id: int, include_relations: bool = True) -> Dict[str, Any]:
         """
         Get a single task by ID.
         
@@ -239,15 +288,28 @@ class TasksClient:
             >>> print(task['title'])
             'Fix deployment bug'
         """
-        response = self._request('GET', 'get-task.php', params={'id': task_id})
+        response = self._request(
+            'GET',
+            'get-task.php',
+            params={'id': task_id, 'include_relations': 1 if include_relations else 0},
+        )
         return response['task']
-    
+
     def list_tasks(
         self,
         status: Optional[str] = None,
         assigned_to_user_id: Optional[int] = None,
+        created_by_user_id: Optional[int] = None,
+        priority: Optional[str] = None,
+        project: Optional[str] = None,
+        q: Optional[str] = None,
+        due_before: Optional[str] = None,
+        due_after: Optional[str] = None,
+        watcher_user_id: Optional[int] = None,
+        sort_by: Optional[str] = None,
+        sort_dir: Optional[str] = None,
         limit: Optional[int] = None,
-        offset: int = 0
+        offset: int = 0,
     ) -> Dict[str, Any]:
         """
         List tasks with optional filtering.
@@ -271,17 +333,48 @@ class TasksClient:
             params['status'] = status
         if assigned_to_user_id is not None:
             params['assigned_to_user_id'] = assigned_to_user_id
+        if created_by_user_id is not None:
+            params['created_by_user_id'] = created_by_user_id
+        if priority is not None:
+            params['priority'] = priority
+        if project is not None:
+            params['project'] = project
+        if q is not None:
+            params['q'] = q
+        if due_before is not None:
+            params['due_before'] = due_before
+        if due_after is not None:
+            params['due_after'] = due_after
+        if watcher_user_id is not None:
+            params['watcher_user_id'] = watcher_user_id
+        if sort_by is not None:
+            params['sort_by'] = sort_by
+        if sort_dir is not None:
+            params['sort_dir'] = sort_dir
         if limit is not None:
             params['limit'] = limit
-        if offset > 0:
+        if offset >= 0:
             params['offset'] = offset
-        
+
         response = self._request('GET', 'list-tasks.php', params=params)
         return {
             'tasks': response['tasks'],
-            'count': response['count']
+            'count': response['count'],
+            'total': response.get('total', response.get('count', 0)),
+            'pagination': response.get('pagination'),
         }
-    
+
+    def search_tasks(self, q: str, **kwargs) -> Dict[str, Any]:
+        params = {'q': q}
+        params.update(kwargs)
+        response = self._request('GET', 'search-tasks.php', params=params)
+        return {
+            'tasks': response.get('tasks', []),
+            'count': response.get('count', 0),
+            'total': response.get('total', 0),
+            'pagination': response.get('pagination'),
+        }
+
     def delete_task(self, task_id: int) -> bool:
         """
         Delete a task.
@@ -297,4 +390,159 @@ class TasksClient:
             True
         """
         response = self._request('POST', 'delete-task.php', data={'id': task_id})
-        return response.get('success', False)
+        return bool(response.get('success', False))
+
+    # ---------- Bulk ----------
+    def bulk_create_tasks(self, tasks: List[Dict[str, Any]]) -> Dict[str, Any]:
+        return self._request('POST', 'bulk-create-tasks.php', data={'tasks': tasks})
+
+    def bulk_update_tasks(self, updates: List[Dict[str, Any]]) -> Dict[str, Any]:
+        return self._request('POST', 'bulk-update-tasks.php', data={'updates': updates})
+
+    # ---------- Statuses ----------
+    def list_statuses(self) -> List[Dict[str, Any]]:
+        response = self._request('GET', 'list-statuses.php')
+        return response.get('statuses', [])
+
+    def create_status(
+        self,
+        slug: str,
+        label: str,
+        sort_order: int = 100,
+        is_done: bool = False,
+        is_default: bool = False,
+    ) -> Dict[str, Any]:
+        response = self._request(
+            'POST',
+            'create-status.php',
+            data={
+                'slug': slug,
+                'label': label,
+                'sort_order': sort_order,
+                'is_done': is_done,
+                'is_default': is_default,
+            },
+        )
+        return response.get('status', {})
+
+    # ---------- Users ----------
+    def list_users(self, include_disabled: bool = False) -> List[Dict[str, Any]]:
+        response = self._request(
+            'GET',
+            'list-users.php',
+            params={'include_disabled': 1 if include_disabled else 0},
+        )
+        return response.get('users', [])
+
+    def create_user(
+        self,
+        username: str,
+        password: str,
+        role: str = 'member',
+        must_change_password: bool = True,
+        create_api_key: bool = False,
+        api_key_name: str = 'default',
+    ) -> Dict[str, Any]:
+        payload = {
+            'username': username,
+            'password': password,
+            'role': role,
+            'must_change_password': must_change_password,
+            'create_api_key': create_api_key,
+            'api_key_name': api_key_name,
+        }
+        return self._request('POST', 'create-user.php', data=payload)
+
+    def disable_user(self, user_id: int, is_active: bool = False) -> Dict[str, Any]:
+        return self._request('POST', 'disable-user.php', data={'id': user_id, 'is_active': is_active})
+
+    def reset_user_password(
+        self,
+        user_id: int,
+        new_password: Optional[str] = None,
+        must_change_password: bool = True,
+    ) -> Dict[str, Any]:
+        payload = {'id': user_id, 'must_change_password': must_change_password}
+        if new_password is not None:
+            payload['new_password'] = new_password
+        return self._request('POST', 'reset-user-password.php', data=payload)
+
+    # ---------- API keys ----------
+    def list_api_keys(self, include_revoked: bool = False, mine: bool = False) -> List[Dict[str, Any]]:
+        response = self._request(
+            'GET',
+            'list-api-keys.php',
+            params={'include_revoked': 1 if include_revoked else 0, 'mine': 1 if mine else 0},
+        )
+        return response.get('api_keys', [])
+
+    def create_api_key(self, key_name: str, user_id: Optional[int] = None) -> Dict[str, Any]:
+        payload = {'key_name': key_name}
+        if user_id is not None:
+            payload['user_id'] = user_id
+        return self._request('POST', 'create-api-key.php', data=payload)
+
+    def revoke_api_key(self, key_id: int) -> Dict[str, Any]:
+        return self._request('POST', 'revoke-api-key.php', data={'id': key_id})
+
+    # ---------- Collaboration ----------
+    def list_comments(self, task_id: int, limit: int = 100, offset: int = 0) -> List[Dict[str, Any]]:
+        response = self._request(
+            'GET',
+            'list-comments.php',
+            params={'task_id': task_id, 'limit': limit, 'offset': offset},
+        )
+        return response.get('comments', [])
+
+    def create_comment(self, task_id: int, comment: str) -> Dict[str, Any]:
+        response = self._request('POST', 'create-comment.php', data={'task_id': task_id, 'comment': comment})
+        return response.get('comment', {})
+
+    def list_attachments(self, task_id: int) -> List[Dict[str, Any]]:
+        response = self._request('GET', 'list-attachments.php', params={'task_id': task_id})
+        return response.get('attachments', [])
+
+    def add_attachment(
+        self,
+        task_id: int,
+        file_name: str,
+        file_url: str,
+        mime_type: Optional[str] = None,
+        size_bytes: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        payload = {'task_id': task_id, 'file_name': file_name, 'file_url': file_url}
+        if mime_type is not None:
+            payload['mime_type'] = mime_type
+        if size_bytes is not None:
+            payload['size_bytes'] = size_bytes
+        return self._request('POST', 'add-attachment.php', data=payload)
+
+    def list_watchers(self, task_id: int) -> List[Dict[str, Any]]:
+        response = self._request('GET', 'list-watchers.php', params={'task_id': task_id})
+        return response.get('watchers', [])
+
+    def watch_task(self, task_id: int, user_id: Optional[int] = None) -> Dict[str, Any]:
+        payload = {'task_id': task_id}
+        if user_id is not None:
+            payload['user_id'] = user_id
+        return self._request('POST', 'watch-task.php', data=payload)
+
+    def unwatch_task(self, task_id: int, user_id: Optional[int] = None) -> Dict[str, Any]:
+        payload = {'task_id': task_id}
+        if user_id is not None:
+            payload['user_id'] = user_id
+        return self._request('POST', 'unwatch-task.php', data=payload)
+
+    # ---------- Taxonomy ----------
+    def list_projects(self, limit: int = 200) -> List[Dict[str, Any]]:
+        response = self._request('GET', 'list-projects.php', params={'limit': limit})
+        return response.get('projects', [])
+
+    def list_tags(self, limit: int = 200) -> List[Dict[str, Any]]:
+        response = self._request('GET', 'list-tags.php', params={'limit': limit})
+        return response.get('tags', [])
+
+    # ---------- Auditing ----------
+    def list_audit_logs(self, limit: int = 100, offset: int = 0) -> List[Dict[str, Any]]:
+        response = self._request('GET', 'list-audit-logs.php', params={'limit': limit, 'offset': offset})
+        return response.get('logs', [])
