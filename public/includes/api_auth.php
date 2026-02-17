@@ -69,12 +69,120 @@ function setRateLimitHeaders(array $rateState): void {
     header('X-RateLimit-Reset: ' . (int)($rateState['reset_epoch'] ?? time()));
 }
 
+function requestScheme(): string {
+    $https = strtolower((string)($_SERVER['HTTPS'] ?? ''));
+    return ($https !== '' && $https !== 'off') ? 'https' : 'http';
+}
+
+function sanitizeUrlHost(string $host): ?string {
+    $host = trim($host);
+    if ($host === '') {
+        return null;
+    }
+
+    if (substr($host, 0, 1) === '[') {
+        $closingBracket = strpos($host, ']');
+        if ($closingBracket === false) {
+            return null;
+        }
+        $host = substr($host, 1, $closingBracket - 1);
+    } elseif (substr_count($host, ':') === 1) {
+        [$rawHost, $rawPort] = explode(':', $host, 2);
+        if ($rawPort !== '' && !ctype_digit($rawPort)) {
+            return null;
+        }
+        $host = $rawHost;
+    }
+
+    $host = strtolower(trim($host));
+    if ($host === '') {
+        return null;
+    }
+
+    if (filter_var($host, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) !== false) {
+        return $host;
+    }
+    if (filter_var($host, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6) !== false) {
+        return '[' . $host . ']';
+    }
+    if (filter_var($host, FILTER_VALIDATE_DOMAIN, FILTER_FLAG_HOSTNAME) !== false) {
+        return $host;
+    }
+    if ($host === 'localhost') {
+        return $host;
+    }
+    return null;
+}
+
+function normalizedPortFromServer(string $scheme): ?int {
+    if (!isset($_SERVER['SERVER_PORT'])) {
+        return null;
+    }
+
+    $port = (int)$_SERVER['SERVER_PORT'];
+    if ($port <= 0 || $port > 65535) {
+        return null;
+    }
+    if (($scheme === 'http' && $port === 80) || ($scheme === 'https' && $port === 443)) {
+        return null;
+    }
+    return $port;
+}
+
+function configuredAppOrigin(): ?string {
+    $configured = trim((string)envOrDefault('TASKS_APP_BASE_URL', ''));
+    if ($configured === '') {
+        return null;
+    }
+
+    $parts = parse_url($configured);
+    if (!is_array($parts)) {
+        return null;
+    }
+
+    $scheme = strtolower((string)($parts['scheme'] ?? ''));
+    if ($scheme !== 'http' && $scheme !== 'https') {
+        return null;
+    }
+
+    $host = sanitizeUrlHost((string)($parts['host'] ?? ''));
+    if ($host === null) {
+        return null;
+    }
+
+    $port = isset($parts['port']) ? (int)$parts['port'] : null;
+    if ($port !== null && ($port <= 0 || $port > 65535)) {
+        return null;
+    }
+
+    $isDefaultPort = ($scheme === 'http' && $port === 80) || ($scheme === 'https' && $port === 443);
+    $portSuffix = ($port !== null && !$isDefaultPort) ? (':' . $port) : '';
+    return $scheme . '://' . $host . $portSuffix;
+}
+
+function requestOrigin(): string {
+    $configured = configuredAppOrigin();
+    if ($configured !== null) {
+        return $configured;
+    }
+
+    $scheme = requestScheme();
+    $host = 'localhost';
+    foreach ([(string)($_SERVER['SERVER_ADDR'] ?? ''), (string)($_SERVER['SERVER_NAME'] ?? '')] as $candidate) {
+        $sanitized = sanitizeUrlHost($candidate);
+        if ($sanitized !== null) {
+            $host = $sanitized;
+            break;
+        }
+    }
+    $port = normalizedPortFromServer($scheme);
+    $portSuffix = $port !== null ? (':' . $port) : '';
+    return $scheme . '://' . $host . $portSuffix;
+}
+
 function buildAbsoluteUrl(string $path, array $queryParams = []): string {
-    $isHttps = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off');
-    $scheme = $isHttps ? 'https' : 'http';
-    $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
     $query = http_build_query($queryParams);
-    return $scheme . '://' . $host . $path . ($query ? ('?' . $query) : '');
+    return requestOrigin() . $path . ($query ? ('?' . $query) : '');
 }
 
 function paginationMeta(string $path, array $baseQueryParams, int $limit, int $offset, int $total): array {

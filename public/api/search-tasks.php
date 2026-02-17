@@ -38,7 +38,13 @@ $filters = [
 ];
 
 $result = listTasks($filters, true);
-$pagination = paginationMeta('/api/search-tasks.php', ['q' => $q], (int)$result['limit'], (int)$result['offset'], (int)$result['total']);
+$baseQueryParams = [];
+foreach (['q', 'status', 'priority', 'assigned_to_user_id', 'sort_by', 'sort_dir'] as $k) {
+    if (isset($_GET[$k]) && trim((string)$_GET[$k]) !== '') {
+        $baseQueryParams[$k] = (string)$_GET[$k];
+    }
+}
+$pagination = paginationMeta('/api/search-tasks.php', $baseQueryParams, (int)$result['limit'], (int)$result['offset'], (int)$result['total']);
 
 apiSuccess([
     'tasks' => $result['tasks'],
