@@ -19,7 +19,7 @@ from typing import Dict, Any, Optional, List
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 try:
     from tasks_sdk import TasksClient, APIError, NotFoundError, ValidationError
-except ImportError:
+except ImportError:  # pragma: no cover - used in standalone plugin layouts
     # Fallback if SDK not in path
     sys.path.insert(0, str(Path(__file__).parent.parent.parent / "tasks_sdk"))
     from client import TasksClient
@@ -30,7 +30,7 @@ except ImportError:
 BASE_URL = "https://tasks.technonomicon.net"
 try:
     from smcp_plugin.tasks import __version__ as PLUGIN_VERSION
-except ImportError:
+except ImportError:  # pragma: no cover - fallback when executed outside package context
     PLUGIN_VERSION = "0.2.1"
 DEBUG_TRACEBACKS = False
 
@@ -479,5 +479,5 @@ def main():
         sys.exit(1)
 
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover
     main()

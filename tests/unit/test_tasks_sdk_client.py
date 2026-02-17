@@ -3,6 +3,7 @@ from typing import Any, Dict, Optional
 from unittest.mock import Mock
 
 import pytest
+import requests
 
 from tasks_sdk import TasksClient
 from tasks_sdk.exceptions import APIError, AuthenticationError, NotFoundError, ValidationError
@@ -74,6 +75,40 @@ def test_request_raises_for_invalid_json_payload(client: TasksClient):
         client._request("GET", "health.php")
 
 
+def test_request_success_returns_response_payload(client: TasksClient):
+    payload = {"ok": True, "message": "healthy"}
+    client.session.request = Mock(return_value=DummyResponse(200, payload))
+    assert client._request("GET", "health.php") == payload
+
+
+def test_request_maps_request_exception(client: TasksClient):
+    client.session.request = Mock(side_effect=requests.exceptions.RequestException("timeout"))
+    with pytest.raises(APIError) as exc:
+        client._request("GET", "health.php")
+    assert "Request failed" in str(exc.value)
+
+
+def test_request_maps_non_ok_status_to_api_error(client: TasksClient):
+    client.session.request = Mock(return_value=DummyResponse(500, {"error": "server blew up"}))
+    with pytest.raises(APIError) as exc:
+        client._request("GET", "health.php")
+    assert "server blew up" in str(exc.value)
+
+
+def test_health_wrapper_calls_health_endpoint(client: TasksClient, monkeypatch: pytest.MonkeyPatch):
+    captured = {}
+
+    def fake_request(method: str, endpoint: str, params=None, data=None):
+        captured["method"] = method
+        captured["endpoint"] = endpoint
+        return {"ok": True}
+
+    monkeypatch.setattr(client, "_request", fake_request)
+    assert client.health()["ok"] is True
+    assert captured["method"] == "GET"
+    assert captured["endpoint"] == "health.php"
+
+
 def test_create_task_includes_new_metadata_fields(client: TasksClient, monkeypatch: pytest.MonkeyPatch):
     captured = {}
 
@@ -135,6 +170,57 @@ def test_update_task_supports_unassign_and_clear_body(client: TasksClient, monke
     assert captured["data"]["rank"] == 50
 
 
+def test_update_task_includes_standard_optional_fields(client: TasksClient, monkeypatch: pytest.MonkeyPatch):
+    captured = {}
+
+    def fake_request(method: str, endpoint: str, params=None, data=None):
+        captured["method"] = method
+        captured["endpoint"] = endpoint
+        captured["data"] = data
+        return {"task": {"id": data["id"], "title": data.get("title", "x")}}
+
+    monkeypatch.setattr(client, "_request", fake_request)
+    client.update_task(
+        task_id=321,
+        title="New title",
+        status="doing",
+        assigned_to_user_id=7,
+        body="Updated body",
+        due_at="2026-03-11T12:00:00Z",
+        project="Platform",
+        tags=["x", "y"],
+        recurrence_rule="FREQ=DAILY",
+    )
+
+    assert captured["method"] == "POST"
+    assert captured["endpoint"] == "update-task.php"
+    assert captured["data"]["title"] == "New title"
+    assert captured["data"]["status"] == "doing"
+    assert captured["data"]["assigned_to_user_id"] == 7
+    assert captured["data"]["body"] == "Updated body"
+    assert captured["data"]["due_at"] == "2026-03-11T12:00:00Z"
+    assert captured["data"]["project"] == "Platform"
+    assert captured["data"]["tags"] == ["x", "y"]
+    assert captured["data"]["recurrence_rule"] == "FREQ=DAILY"
+
+
+def test_get_task_wrapper_honors_include_relations_flag(client: TasksClient, monkeypatch: pytest.MonkeyPatch):
+    captured = {}
+
+    def fake_request(method: str, endpoint: str, params=None, data=None):
+        captured["method"] = method
+        captured["endpoint"] = endpoint
+        captured["params"] = params
+        return {"task": {"id": 55, "title": "x"}}
+
+    monkeypatch.setattr(client, "_request", fake_request)
+    task = client.get_task(55, include_relations=False)
+    assert task["id"] == 55
+    assert captured["method"] == "GET"
+    assert captured["endpoint"] == "get-task.php"
+    assert captured["params"] == {"id": 55, "include_relations": 0}
+
+
 def test_list_tasks_returns_total_and_pagination(client: TasksClient, monkeypatch: pytest.MonkeyPatch):
     def fake_request(method: str, endpoint: str, params=None, data=None):
         assert method == "GET"
@@ -152,6 +238,83 @@ def test_list_tasks_returns_total_and_pagination(client: TasksClient, monkeypatc
     assert result["count"] == 1
     assert result["total"] == 10
     assert result["pagination"]["limit"] == 5
+
+
+def test_list_tasks_includes_extended_filters(client: TasksClient, monkeypatch: pytest.MonkeyPatch):
+    captured = {}
+
+    def fake_request(method: str, endpoint: str, params=None, data=None):
+        captured["method"] = method
+        captured["endpoint"] = endpoint
+        captured["params"] = params
+        return {"tasks": [], "count": 0, "total": 0, "pagination": {}}
+
+    monkeypatch.setattr(client, "_request", fake_request)
+    client.list_tasks(
+        status="todo",
+        assigned_to_user_id=2,
+        created_by_user_id=3,
+        priority="high",
+        project="Core",
+        due_before="2026-04-01T00:00:00Z",
+        due_after="2026-03-01T00:00:00Z",
+        watcher_user_id=5,
+        offset=0,
+    )
+
+    assert captured["method"] == "GET"
+    assert captured["endpoint"] == "list-tasks.php"
+    assert captured["params"]["status"] == "todo"
+    assert captured["params"]["assigned_to_user_id"] == 2
+    assert captured["params"]["created_by_user_id"] == 3
+    assert captured["params"]["priority"] == "high"
+    assert captured["params"]["project"] == "Core"
+    assert captured["params"]["due_before"] == "2026-04-01T00:00:00Z"
+    assert captured["params"]["due_after"] == "2026-03-01T00:00:00Z"
+    assert captured["params"]["watcher_user_id"] == 5
+
+
+def test_delete_task_wrapper_calls_endpoint(client: TasksClient, monkeypatch: pytest.MonkeyPatch):
+    captured = {}
+
+    def fake_request(method: str, endpoint: str, params=None, data=None):
+        captured["method"] = method
+        captured["endpoint"] = endpoint
+        captured["data"] = data
+        return {"success": True}
+
+    monkeypatch.setattr(client, "_request", fake_request)
+    assert client.delete_task(123) is True
+    assert captured["method"] == "POST"
+    assert captured["endpoint"] == "delete-task.php"
+    assert captured["data"] == {"id": 123}
+
+
+def test_optional_payload_fields_in_wrappers(client: TasksClient, monkeypatch: pytest.MonkeyPatch):
+    calls = []
+
+    def fake_request(method: str, endpoint: str, params=None, data=None):
+        calls.append((method, endpoint, params, data))
+        if endpoint == "reset-user-password.php":
+            return {"success": True}
+        if endpoint == "create-api-key.php":
+            return {"success": True}
+        return {"success": True}
+
+    monkeypatch.setattr(client, "_request", fake_request)
+    client.reset_user_password(9, new_password="Temp123!", must_change_password=False)
+    client.create_api_key("name", user_id=3)
+    client.add_attachment(7, "log.txt", "https://example.com/log.txt", mime_type="text/plain", size_bytes=42)
+    client.watch_task(7, user_id=3)
+    client.unwatch_task(7, user_id=3)
+
+    endpoint_to_payload = {endpoint: payload for _, endpoint, _, payload in calls}
+    assert endpoint_to_payload["reset-user-password.php"]["new_password"] == "Temp123!"
+    assert endpoint_to_payload["create-api-key.php"]["user_id"] == 3
+    assert endpoint_to_payload["add-attachment.php"]["mime_type"] == "text/plain"
+    assert endpoint_to_payload["add-attachment.php"]["size_bytes"] == 42
+    assert endpoint_to_payload["watch-task.php"]["user_id"] == 3
+    assert endpoint_to_payload["unwatch-task.php"]["user_id"] == 3
 
 
 def test_extended_endpoint_wrappers(client: TasksClient, monkeypatch: pytest.MonkeyPatch):

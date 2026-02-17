@@ -1,4 +1,5 @@
 import json
+import argparse
 import sys
 from unittest.mock import Mock
 
@@ -306,3 +307,222 @@ def test_main_default_error_output_omits_traceback(
     assert payload["status"] == "error"
     assert payload["error_type"] == "unknown_error"
     assert "traceback" not in payload
+
+
+def test_get_client_requires_api_key():
+    with pytest.raises(ValueError):
+        cli.get_client("")
+
+
+def test_get_client_returns_configured_client():
+    client = cli.get_client("abc123")
+    assert client.api_key == "abc123"
+    assert client.base_url == cli.BASE_URL
+
+
+def test_get_subparsers_action_returns_none_when_no_subparsers():
+    parser = argparse.ArgumentParser()
+    assert cli._get_subparsers_action(parser) is None
+
+
+def test_describe_action_handles_float_type_and_suppressed_default():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--threshold", type=float, default=argparse.SUPPRESS, help="Threshold")
+    action = next(item for item in parser._actions if item.dest == "threshold")
+    described = cli._describe_action(action)
+    assert described["type"] == "number"
+    assert described["default"] is None
+
+
+def test_canonical_option_name_normalizes_underscore_option():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--api_key", dest="api_key")
+    action = next(item for item in parser._actions if item.dest == "api_key")
+    assert cli._canonical_option_name(action) == "api-key"
+
+
+def test_canonical_option_name_handles_positional_arguments():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("task_id")
+    action = next(item for item in parser._actions if item.dest == "task_id")
+    assert cli._canonical_option_name(action) == "task-id"
+
+
+@pytest.mark.parametrize(
+    ("raised", "error_type"),
+    [
+        (cli.ValidationError("bad request"), "validation_error"),
+        (cli.APIError("api down"), "api_error"),
+        (RuntimeError("boom"), "unknown_error"),
+    ],
+)
+def test_create_task_error_mapping(monkeypatch: pytest.MonkeyPatch, raised: Exception, error_type: str):
+    fake_client = Mock()
+    fake_client.create_task.side_effect = raised
+    monkeypatch.setattr(cli, "get_client", lambda api_key: fake_client)
+    result = cli.create_task({"title": "x"}, "k")
+    assert result["status"] == "error"
+    assert result["error_type"] == error_type
+
+
+@pytest.mark.parametrize(
+    ("raised", "error_type"),
+    [
+        (cli.NotFoundError("missing"), "not_found"),
+        (cli.ValidationError("bad update"), "validation_error"),
+        (cli.APIError("api down"), "api_error"),
+        (RuntimeError("boom"), "unknown_error"),
+    ],
+)
+def test_update_task_error_mapping(monkeypatch: pytest.MonkeyPatch, raised: Exception, error_type: str):
+    fake_client = Mock()
+    fake_client.update_task.side_effect = raised
+    monkeypatch.setattr(cli, "get_client", lambda api_key: fake_client)
+    result = cli.update_task({"task-id": 1}, "k")
+    assert result["status"] == "error"
+    assert result["error_type"] == error_type
+
+
+def test_get_task_success(monkeypatch: pytest.MonkeyPatch):
+    fake_client = Mock()
+    fake_client.get_task.return_value = {"id": 1, "title": "hello"}
+    monkeypatch.setattr(cli, "get_client", lambda api_key: fake_client)
+    result = cli.get_task({"task-id": 1}, "k")
+    assert result["status"] == "success"
+    assert result["task"]["id"] == 1
+
+
+@pytest.mark.parametrize(
+    ("raised", "error_type"),
+    [
+        (cli.NotFoundError("missing"), "not_found"),
+        (cli.ValidationError("bad id"), "validation_error"),
+        (cli.APIError("api down"), "api_error"),
+        (RuntimeError("boom"), "unknown_error"),
+    ],
+)
+def test_get_task_error_mapping(monkeypatch: pytest.MonkeyPatch, raised: Exception, error_type: str):
+    fake_client = Mock()
+    fake_client.get_task.side_effect = raised
+    monkeypatch.setattr(cli, "get_client", lambda api_key: fake_client)
+    result = cli.get_task({"task-id": 999}, "k")
+    assert result["status"] == "error"
+    assert result["error_type"] == error_type
+
+
+def test_delete_task_success(monkeypatch: pytest.MonkeyPatch):
+    fake_client = Mock()
+    fake_client.delete_task.return_value = True
+    monkeypatch.setattr(cli, "get_client", lambda api_key: fake_client)
+    result = cli.delete_task({"task-id": 2}, "k")
+    assert result["status"] == "success"
+    assert result["deleted"] is True
+
+
+@pytest.mark.parametrize(
+    ("raised", "error_type"),
+    [
+        (cli.NotFoundError("missing"), "not_found"),
+        (cli.ValidationError("bad id"), "validation_error"),
+        (cli.APIError("api down"), "api_error"),
+        (RuntimeError("boom"), "unknown_error"),
+    ],
+)
+def test_delete_task_error_mapping(monkeypatch: pytest.MonkeyPatch, raised: Exception, error_type: str):
+    fake_client = Mock()
+    fake_client.delete_task.side_effect = raised
+    monkeypatch.setattr(cli, "get_client", lambda api_key: fake_client)
+    result = cli.delete_task({"task-id": 999}, "k")
+    assert result["status"] == "error"
+    assert result["error_type"] == error_type
+
+
+def test_main_parse_runtime_exception_emits_argument_error(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture,
+):
+    parser = cli.build_parser()
+
+    def fail_parse():
+        raise RuntimeError("parse blew up")
+
+    monkeypatch.setattr(parser, "parse_args", fail_parse)
+    monkeypatch.setattr(cli, "build_parser", lambda: parser)
+
+    with pytest.raises(SystemExit) as exc:
+        cli.main()
+    assert exc.value.code == 2
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["error_type"] == "argument_error"
+
+
+def test_main_no_command_prints_help_and_exits_one(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.setattr(sys, "argv", ["cli.py"])
+    with pytest.raises(SystemExit) as exc:
+        cli.main()
+    assert exc.value.code == 1
+
+
+def test_main_missing_api_key_emits_validation_error(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture,
+):
+    parser = cli.build_parser()
+    namespace = argparse.Namespace(command="list-tasks", describe=False, debug=False, api_key=None)
+    monkeypatch.setattr(parser, "parse_args", lambda: namespace)
+    monkeypatch.setattr(cli, "build_parser", lambda: parser)
+
+    with pytest.raises(SystemExit) as exc:
+        cli.main()
+    assert exc.value.code == 1
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["error_type"] == "validation_error"
+
+
+@pytest.mark.parametrize(
+    ("argv", "func_name"),
+    [
+        (["cli.py", "update-task", "--api-key", "k", "--task-id", "10"], "update_task"),
+        (["cli.py", "list-tasks", "--api-key", "k"], "list_tasks"),
+        (["cli.py", "get-task", "--api-key", "k", "--task-id", "10"], "get_task"),
+        (["cli.py", "delete-task", "--api-key", "k", "--task-id", "10"], "delete_task"),
+    ],
+)
+def test_main_dispatches_all_non_create_commands(
+    monkeypatch: pytest.MonkeyPatch,
+    argv,
+    func_name: str,
+):
+    called = {}
+
+    def fake_handler(args, api_key):
+        called["args"] = args
+        called["api_key"] = api_key
+        return {"status": "success"}
+
+    monkeypatch.setattr(cli, func_name, fake_handler)
+    monkeypatch.setattr(sys, "argv", argv)
+
+    with pytest.raises(SystemExit) as exc:
+        cli.main()
+    assert exc.value.code == 0
+    assert called["api_key"] == "k"
+
+
+def test_main_unknown_command_path_returns_argument_error(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture,
+):
+    parser = cli.build_parser()
+    namespace = argparse.Namespace(command="unknown-cmd", describe=False, debug=False, api_key="k")
+    monkeypatch.setattr(parser, "parse_args", lambda: namespace)
+    monkeypatch.setattr(cli, "build_parser", lambda: parser)
+
+    with pytest.raises(SystemExit) as exc:
+        cli.main()
+    assert exc.value.code == 1
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["status"] == "error"
+    assert payload["error_type"] == "argument_error"
