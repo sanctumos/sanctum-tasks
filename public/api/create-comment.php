@@ -36,6 +36,6 @@ apiSuccess([
         'user_id' => (int)$apiUser['id'],
         'username' => $apiUser['username'],
         'comment' => $comment,
-        'created_at' => nowUtc(),
+        'created_at' => $result['created_at'] ?? nowUtc(),
     ],
 ], [], 201);

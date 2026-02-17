@@ -1383,8 +1383,12 @@ function addTaskComment(int $taskId, int $userId, string $comment): array {
     $upd->execute();
 
     $id = (int)$db->lastInsertRowID();
+    $sel = $db->prepare("SELECT created_at FROM task_comments WHERE id = :id LIMIT 1");
+    $sel->bindValue(':id', $id, SQLITE3_INTEGER);
+    $createdRow = $sel->execute()->fetchArray(SQLITE3_ASSOC);
+    $createdAt = $createdRow ? $createdRow['created_at'] : nowUtc();
     createAuditLog($userId, 'task.comment_add', 'task_comment', (string)$id, ['task_id' => $taskId]);
-    return ['success' => true, 'id' => $id];
+    return ['success' => true, 'id' => $id, 'created_at' => $createdAt];
 }
 
 function listTaskAttachments(int $taskId): array {
