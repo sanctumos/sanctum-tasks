@@ -157,6 +157,7 @@ function changePassword($userId, $currentPassword, $newPassword): array {
     $user = $result->fetchArray(SQLITE3_ASSOC);
 
     if (!$user || !password_verify((string)$currentPassword, $user['password_hash'])) {
+        unset($result, $stmt, $db);
         return ['success' => false, 'error' => 'Current password is incorrect'];
     }
 
@@ -172,6 +173,10 @@ function changePassword($userId, $currentPassword, $newPassword): array {
     $update->execute();
 
     $_SESSION['must_change_password'] = 0;
+
+    // Release the active writer connection before opening a new one in createAuditLog().
+    unset($result, $stmt, $update, $db);
+
     createAuditLog($userId, 'user.password_change', 'user', (string)$userId);
     return ['success' => true];
 }

@@ -13,13 +13,13 @@ import json
 import sys
 import traceback
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 
 # Add parent directory to path to import SDK
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 try:
     from tasks_sdk import TasksClient, APIError, NotFoundError, ValidationError
-except ImportError:
+except ImportError:  # pragma: no cover - used in standalone plugin layouts
     # Fallback if SDK not in path
     sys.path.insert(0, str(Path(__file__).parent.parent.parent / "tasks_sdk"))
     from client import TasksClient
@@ -28,6 +28,76 @@ except ImportError:
 
 # Hard-coded base URL for the live site
 BASE_URL = "https://tasks.technonomicon.net"
+try:
+    from smcp_plugin.tasks import __version__ as PLUGIN_VERSION
+except ImportError:  # pragma: no cover - fallback when executed outside package context
+    PLUGIN_VERSION = "0.2.1"
+DEBUG_TRACEBACKS = False
+
+
+def _error_response(error: str, error_type: str, include_traceback: bool = True) -> Dict[str, Any]:
+    """Create a structured error payload with optional traceback details."""
+    payload: Dict[str, Any] = {
+        "status": "error",
+        "error": error,
+        "error_type": error_type,
+    }
+    if include_traceback and DEBUG_TRACEBACKS:
+        payload["traceback"] = traceback.format_exc()
+    return payload
+
+
+def _arg_type_name(action: argparse.Action) -> str:
+    """Convert argparse action type metadata to schema type names."""
+    if isinstance(action, argparse._StoreTrueAction):
+        return "boolean"
+    if action.type is int:
+        return "integer"
+    if action.type is float:
+        return "number"
+    return "string"
+
+
+def _canonical_option_name(action: argparse.Action) -> str:
+    """Pick a stable parameter name from argparse option strings."""
+    for option in action.option_strings:
+        if option.startswith("--") and "_" not in option:
+            return option[2:]
+    for option in action.option_strings:
+        if option.startswith("--"):
+            return option[2:].replace("_", "-")
+    return action.dest.replace("_", "-")
+
+
+def _describe_action(action: argparse.Action) -> Optional[Dict[str, Any]]:
+    """Return command parameter metadata for an argparse action."""
+    if action.dest == "help" or action.help == argparse.SUPPRESS:
+        return None
+
+    description = action.help or ""
+    if action.choices:
+        choices_text = ", ".join(str(choice) for choice in action.choices)
+        description = f"{description} Choices: {choices_text}".strip()
+
+    if action.default is argparse.SUPPRESS:
+        default_value = None
+    else:
+        default_value = action.default
+
+    return {
+        "name": _canonical_option_name(action),
+        "type": _arg_type_name(action),
+        "description": description,
+        "required": bool(getattr(action, "required", False)),
+        "default": default_value,
+    }
+
+
+def _get_subparsers_action(parser: argparse.ArgumentParser) -> Optional[argparse._SubParsersAction]:
+    for action in parser._actions:
+        if isinstance(action, argparse._SubParsersAction):
+            return action
+    return None
 
 def get_client(api_key: str) -> TasksClient:
     """Get configured Tasks client."""
@@ -64,23 +134,11 @@ def create_task(args: Dict[str, Any], api_key: str) -> Dict[str, Any]:
             "task": task
         }
     except ValidationError as e:
-        return {
-            "status": "error",
-            "error": f"Validation error: {str(e)}",
-            "error_type": "validation_error"
-        }
+        return _error_response(f"Validation error: {str(e)}", "validation_error")
     except APIError as e:
-        return {
-            "status": "error",
-            "error": f"API error: {str(e)}",
-            "error_type": "api_error"
-        }
+        return _error_response(f"API error: {str(e)}", "api_error")
     except Exception as e:
-        return {
-            "status": "error",
-            "error": f"Unexpected error: {str(e)}",
-            "error_type": "unknown_error"
-        }
+        return _error_response(f"Unexpected error: {str(e)}", "unknown_error")
 
 
 def update_task(args: Dict[str, Any], api_key: str) -> Dict[str, Any]:
@@ -113,29 +171,13 @@ def update_task(args: Dict[str, Any], api_key: str) -> Dict[str, Any]:
             "task": task
         }
     except NotFoundError as e:
-        return {
-            "status": "error",
-            "error": f"Task not found: {str(e)}",
-            "error_type": "not_found"
-        }
+        return _error_response(f"Task not found: {str(e)}", "not_found")
     except ValidationError as e:
-        return {
-            "status": "error",
-            "error": f"Validation error: {str(e)}",
-            "error_type": "validation_error"
-        }
+        return _error_response(f"Validation error: {str(e)}", "validation_error")
     except APIError as e:
-        return {
-            "status": "error",
-            "error": f"API error: {str(e)}",
-            "error_type": "api_error"
-        }
+        return _error_response(f"API error: {str(e)}", "api_error")
     except Exception as e:
-        return {
-            "status": "error",
-            "error": f"Unexpected error: {str(e)}",
-            "error_type": "unknown_error"
-        }
+        return _error_response(f"Unexpected error: {str(e)}", "unknown_error")
 
 
 def list_tasks(args: Dict[str, Any], api_key: str) -> Dict[str, Any]:
@@ -163,19 +205,9 @@ def list_tasks(args: Dict[str, Any], api_key: str) -> Dict[str, Any]:
             "tasks": result["tasks"]
         }
     except APIError as e:
-        return {
-            "status": "error",
-            "error": f"API error: {str(e)}",
-            "error_type": "api_error",
-            "traceback": traceback.format_exc()
-        }
+        return _error_response(f"API error: {str(e)}", "api_error")
     except Exception as e:
-        return {
-            "status": "error",
-            "error": f"Unexpected error: {str(e)}",
-            "error_type": "unknown_error",
-            "traceback": traceback.format_exc()
-        }
+        return _error_response(f"Unexpected error: {str(e)}", "unknown_error")
 
 
 def get_task(args: Dict[str, Any], api_key: str) -> Dict[str, Any]:
@@ -190,33 +222,13 @@ def get_task(args: Dict[str, Any], api_key: str) -> Dict[str, Any]:
             "task": task
         }
     except NotFoundError as e:
-        return {
-            "status": "error",
-            "error": f"Task not found: {str(e)}",
-            "error_type": "not_found",
-            "traceback": traceback.format_exc()
-        }
+        return _error_response(f"Task not found: {str(e)}", "not_found")
     except ValidationError as e:
-        return {
-            "status": "error",
-            "error": f"Validation error: {str(e)}",
-            "error_type": "validation_error",
-            "traceback": traceback.format_exc()
-        }
+        return _error_response(f"Validation error: {str(e)}", "validation_error")
     except APIError as e:
-        return {
-            "status": "error",
-            "error": f"API error: {str(e)}",
-            "error_type": "api_error",
-            "traceback": traceback.format_exc()
-        }
+        return _error_response(f"API error: {str(e)}", "api_error")
     except Exception as e:
-        return {
-            "status": "error",
-            "error": f"Unexpected error: {str(e)}",
-            "error_type": "unknown_error",
-            "traceback": traceback.format_exc()
-        }
+        return _error_response(f"Unexpected error: {str(e)}", "unknown_error")
 
 
 def delete_task(args: Dict[str, Any], api_key: str) -> Dict[str, Any]:
@@ -232,220 +244,52 @@ def delete_task(args: Dict[str, Any], api_key: str) -> Dict[str, Any]:
             "deleted": result
         }
     except NotFoundError as e:
-        return {
-            "status": "error",
-            "error": f"Task not found: {str(e)}",
-            "error_type": "not_found",
-            "traceback": traceback.format_exc()
-        }
+        return _error_response(f"Task not found: {str(e)}", "not_found")
     except ValidationError as e:
-        return {
-            "status": "error",
-            "error": f"Validation error: {str(e)}",
-            "error_type": "validation_error",
-            "traceback": traceback.format_exc()
-        }
+        return _error_response(f"Validation error: {str(e)}", "validation_error")
     except APIError as e:
-        return {
-            "status": "error",
-            "error": f"API error: {str(e)}",
-            "error_type": "api_error",
-            "traceback": traceback.format_exc()
-        }
+        return _error_response(f"API error: {str(e)}", "api_error")
     except Exception as e:
-        return {
-            "status": "error",
-            "error": f"Unexpected error: {str(e)}",
-            "error_type": "unknown_error",
-            "traceback": traceback.format_exc()
-        }
+        return _error_response(f"Unexpected error: {str(e)}", "unknown_error")
 
 
-def get_plugin_description() -> Dict[str, Any]:
+def get_plugin_description(parser: argparse.ArgumentParser) -> Dict[str, Any]:
     """Return structured plugin description for --describe."""
+    commands: List[Dict[str, Any]] = []
+    subparsers_action = _get_subparsers_action(parser)
+
+    if subparsers_action:
+        command_help = {
+            action.dest: action.help
+            for action in subparsers_action._get_subactions()
+        }
+        for command_name, command_parser in subparsers_action.choices.items():
+            parameters: List[Dict[str, Any]] = []
+            for action in command_parser._actions:
+                described = _describe_action(action)
+                if described is not None:
+                    parameters.append(described)
+
+            commands.append(
+                {
+                    "name": command_name,
+                    "description": command_help.get(command_name, ""),
+                    "parameters": parameters,
+                }
+            )
+
     return {
         "plugin": {
             "name": "tasks",
-            "version": "0.2.0",
-            "description": "Tasks Management API integration for Animus Letta MCP"
+            "version": PLUGIN_VERSION,
+            "description": "Tasks Management API integration for Animus Letta MCP",
         },
-        "commands": [
-            {
-                "name": "create-task",
-                "description": "Create a new task",
-                "parameters": [
-                    {
-                        "name": "api-key",
-                        "type": "string",
-                        "description": "API key for authentication (required)",
-                        "required": True,
-                        "default": None
-                    },
-                    {
-                        "name": "title",
-                        "type": "string",
-                        "description": "Task title",
-                        "required": True,
-                        "default": None
-                    },
-                    {
-                        "name": "status",
-                        "type": "string",
-                        "description": "Task status: 'todo', 'doing', or 'done' (default: 'todo')",
-                        "required": False,
-                        "default": "todo"
-                    },
-                    {
-                        "name": "assigned-to-user-id",
-                        "type": "integer",
-                        "description": "User ID to assign task to",
-                        "required": False,
-                        "default": None
-                    },
-                    {
-                        "name": "body",
-                        "type": "string",
-                        "description": "Task description/details",
-                        "required": False,
-                        "default": None
-                    }
-                ]
-            },
-            {
-                "name": "update-task",
-                "description": "Update an existing task",
-                "parameters": [
-                    {
-                        "name": "api-key",
-                        "type": "string",
-                        "description": "API key for authentication (required)",
-                        "required": True,
-                        "default": None
-                    },
-                    {
-                        "name": "task-id",
-                        "type": "integer",
-                        "description": "Task ID",
-                        "required": True,
-                        "default": None
-                    },
-                    {
-                        "name": "title",
-                        "type": "string",
-                        "description": "New title",
-                        "required": False,
-                        "default": None
-                    },
-                    {
-                        "name": "status",
-                        "type": "string",
-                        "description": "New status: 'todo', 'doing', or 'done'",
-                        "required": False,
-                        "default": None
-                    },
-                    {
-                        "name": "assigned-to-user-id",
-                        "type": "integer",
-                        "description": "New assigned user ID (set to null to unassign)",
-                        "required": False,
-                        "default": None
-                    },
-                    {
-                        "name": "body",
-                        "type": "string",
-                        "description": "New body/description (set to null or empty string to clear)",
-                        "required": False,
-                        "default": None
-                    }
-                ]
-            },
-            {
-                "name": "list-tasks",
-                "description": "List tasks with optional filtering and pagination",
-                "parameters": [
-                    {
-                        "name": "api-key",
-                        "type": "string",
-                        "description": "API key for authentication (required)",
-                        "required": True,
-                        "default": None
-                    },
-                    {
-                        "name": "status",
-                        "type": "string",
-                        "description": "Filter by status: 'todo', 'doing', or 'done'",
-                        "required": False,
-                        "default": None
-                    },
-                    {
-                        "name": "assigned-to-user-id",
-                        "type": "integer",
-                        "description": "Filter by assigned user ID",
-                        "required": False,
-                        "default": None
-                    },
-                    {
-                        "name": "limit",
-                        "type": "integer",
-                        "description": "Maximum number of tasks to return (max: 500, default: 100)",
-                        "required": False,
-                        "default": 100
-                    },
-                    {
-                        "name": "offset",
-                        "type": "integer",
-                        "description": "Number of tasks to skip",
-                        "required": False,
-                        "default": 0
-                    }
-                ]
-            },
-            {
-                "name": "get-task",
-                "description": "Get a single task by ID",
-                "parameters": [
-                    {
-                        "name": "api-key",
-                        "type": "string",
-                        "description": "API key for authentication (required)",
-                        "required": True,
-                        "default": None
-                    },
-                    {
-                        "name": "task-id",
-                        "type": "integer",
-                        "description": "Task ID",
-                        "required": True,
-                        "default": None
-                    }
-                ]
-            },
-            {
-                "name": "delete-task",
-                "description": "Delete a task by ID",
-                "parameters": [
-                    {
-                        "name": "api-key",
-                        "type": "string",
-                        "description": "API key for authentication (required)",
-                        "required": True,
-                        "default": None
-                    },
-                    {
-                        "name": "task-id",
-                        "type": "integer",
-                        "description": "Task ID",
-                        "required": True,
-                        "default": None
-                    }
-                ]
-            }
-        ]
+        "commands": commands,
     }
 
 
-def main():
-    """Main entry point for the plugin CLI."""
+def build_parser() -> argparse.ArgumentParser:
+    """Create and configure the CLI argument parser."""
     parser = argparse.ArgumentParser(
         description="Tasks Management API integration for Animus Letta MCP",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -469,19 +313,29 @@ Examples:
   python cli.py delete-task --api-key "YOUR_KEY" --task-id 123
         """
     )
-    
-    # Add --describe flag
-    parser.add_argument("--describe", action="store_true",
-                       help="Output plugin description in JSON format")
-    
+
+    parser.add_argument(
+        "--describe",
+        action="store_true",
+        help="Output plugin description in JSON format",
+    )
+    parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="Include traceback details in structured error responses",
+    )
+
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
-    
-    # Helper function to add API key argument to subparsers
-    def add_api_key_arg(subparser):
-        subparser.add_argument("--api-key", "--api_key", dest="api_key", required=True,
-                             help="API key for authentication (required)")
-    
-    # Create task command
+
+    def add_api_key_arg(subparser: argparse.ArgumentParser) -> None:
+        subparser.add_argument(
+            "--api-key",
+            "--api_key",
+            dest="api_key",
+            required=True,
+            help="API key for authentication (required)",
+        )
+
     create_parser = subparsers.add_parser("create-task", help="Create a new task")
     add_api_key_arg(create_parser)
     create_parser.add_argument("--title", required=True, help="Task title")
@@ -494,8 +348,7 @@ Examples:
     create_parser.add_argument("--tags", help="Comma-separated tags")
     create_parser.add_argument("--rank", type=int, help="Ordering rank")
     create_parser.add_argument("--recurrence-rule", dest="recurrence_rule", help="Recurrence rule (RRULE-like)")
-    
-    # Update task command
+
     update_parser = subparsers.add_parser("update-task", help="Update an existing task")
     add_api_key_arg(update_parser)
     update_parser.add_argument("--task-id", type=int, required=True, dest="task_id", help="Task ID")
@@ -511,8 +364,7 @@ Examples:
     update_parser.add_argument("--tags", help="Comma-separated tags")
     update_parser.add_argument("--rank", type=int, help="Ordering rank")
     update_parser.add_argument("--recurrence-rule", dest="recurrence_rule", help="Recurrence rule (RRULE-like)")
-    
-    # List tasks command
+
     list_parser = subparsers.add_parser("list-tasks", help="List tasks")
     add_api_key_arg(list_parser)
     list_parser.add_argument("--status", help="Filter by status slug")
@@ -524,71 +376,79 @@ Examples:
     list_parser.add_argument("--sort-dir", dest="sort_dir", choices=["ASC", "DESC", "asc", "desc"], help="Sort direction")
     list_parser.add_argument("--limit", type=int, help="Maximum number of tasks (max: 500, default: 100)")
     list_parser.add_argument("--offset", type=int, default=0, help="Number of tasks to skip")
-    
-    # Get task command
+
     get_parser = subparsers.add_parser("get-task", help="Get a single task by ID")
     add_api_key_arg(get_parser)
     get_parser.add_argument("--task-id", type=int, required=True, dest="task_id", help="Task ID")
-    
-    # Delete task command
+
     delete_parser = subparsers.add_parser("delete-task", help="Delete a task by ID")
     add_api_key_arg(delete_parser)
     delete_parser.add_argument("--task-id", type=int, required=True, dest="task_id", help="Task ID")
-    
+
+    return parser
+
+
+def main():
+    """Main entry point for the plugin CLI."""
+    global DEBUG_TRACEBACKS
+    parser = build_parser()
+
     try:
         args = parser.parse_args()
     except SystemExit as e:
-        # argparse already printed help/error, capture and return as JSON
-        error_msg = {
-            "status": "error",
-            "error": "Invalid arguments. Check command syntax.",
-            "error_type": "argument_error"
-        }
+        # Help exits are normal (exit code 0) and should pass through untouched.
+        if e.code == 0:
+            raise
+        error_msg = _error_response(
+            "Invalid arguments. Check command syntax.",
+            "argument_error",
+            include_traceback=False,
+        )
         print(json.dumps(error_msg, indent=2), file=sys.stderr)
         print(json.dumps(error_msg, indent=2))
-        sys.exit(2)
+        sys.exit(e.code if isinstance(e.code, int) else 2)
     except Exception as e:
-        error_msg = {
-            "status": "error",
-            "error": f"Failed to parse arguments: {str(e)}",
-            "error_type": "argument_error",
-            "traceback": traceback.format_exc()
-        }
+        error_msg = _error_response(
+            f"Failed to parse arguments: {str(e)}",
+            "argument_error",
+        )
         print(json.dumps(error_msg, indent=2), file=sys.stderr)
         print(json.dumps(error_msg, indent=2))
         sys.exit(2)
-    
+
+    DEBUG_TRACEBACKS = bool(getattr(args, "debug", False))
+
     # Handle --describe flag
     if args.describe:
-        description = get_plugin_description()
+        description = get_plugin_description(parser)
         print(json.dumps(description, indent=2))
         sys.exit(0)
-    
+
     if not args.command:
         parser.print_help()
         sys.exit(1)
-    
+
     # Extract API key (should be set by argparse now)
     api_key = getattr(args, 'api_key', None)
     if not api_key:
-        error_msg = {
-            "status": "error",
-            "error": "API key is required. Use --api-key to provide your API key.",
-            "error_type": "validation_error"
-        }
+        error_msg = _error_response(
+            "API key is required. Use --api-key to provide your API key.",
+            "validation_error",
+            include_traceback=False,
+        )
         print(json.dumps(error_msg, indent=2), file=sys.stderr)
         print(json.dumps(error_msg, indent=2))
         sys.exit(1)
-    
+
     try:
         # Convert args to dict, handling Namespace properly
         args_dict = {}
         for key, value in vars(args).items():
-            if key not in ["command", "describe", "api_key"] and value is not None:
+            if key not in ["command", "describe", "api_key", "debug"] and value is not None:
                 # Convert underscores to hyphens for parameter names
                 param_key = key.replace("_", "-")
                 args_dict[param_key] = value
-        
+
         # Execute command
         if args.command == "create-task":
             result = create_task(args_dict, api_key)
@@ -601,18 +461,17 @@ Examples:
         elif args.command == "delete-task":
             result = delete_task(args_dict, api_key)
         else:
-            result = {"status": "error", "error": f"Unknown command: {args.command}"}
-        
+            result = _error_response(
+                f"Unknown command: {args.command}",
+                "argument_error",
+                include_traceback=False,
+            )
+
         print(json.dumps(result, indent=2))
         sys.exit(0 if result.get("status") == "success" else 1)
-        
+
     except Exception as e:
-        error_msg = {
-            "status": "error",
-            "error": str(e),
-            "error_type": "unknown_error",
-            "traceback": traceback.format_exc()
-        }
+        error_msg = _error_response(str(e), "unknown_error")
         # Print to stderr for debugging
         print(json.dumps(error_msg, indent=2), file=sys.stderr)
         # Also print to stdout for SMCP
@@ -620,5 +479,5 @@ Examples:
         sys.exit(1)
 
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover
     main()

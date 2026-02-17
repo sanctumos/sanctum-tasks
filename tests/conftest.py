@@ -2,6 +2,7 @@ import os
 import shutil
 import socket
 import subprocess
+import sys
 import tempfile
 import time
 from dataclasses import dataclass
@@ -13,6 +14,8 @@ import requests
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
 
 def _find_php_binary() -> Optional[str]:
@@ -71,6 +74,7 @@ def _start_php_server(env_overrides: Dict[str, str]) -> PhpServerContext:
             "TASKS_BOOTSTRAP_ADMIN_USERNAME": admin_username,
             "TASKS_BOOTSTRAP_ADMIN_PASSWORD": admin_password,
             "TASKS_BOOTSTRAP_API_KEY": api_key,
+            "TASKS_PASSWORD_COST": "8",
             "TASKS_APP_DEBUG": "1",
             "TASKS_SESSION_COOKIE_SECURE": "0",
             "TASKS_API_RATE_LIMIT_REQUESTS": "10000",

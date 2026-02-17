@@ -18,7 +18,7 @@ if ($targetUserId <= 0) {
 }
 
 $providedPassword = isset($body['new_password']) ? trim((string)$body['new_password']) : '';
-$newPassword = $providedPassword !== '' ? $providedPassword : bin2hex(random_bytes(8));
+$newPassword = $providedPassword !== '' ? $providedPassword : generateTemporaryPassword(16);
 $mustChangePassword = !isset($body['must_change_password']) || (bool)$body['must_change_password'];
 
 $result = resetUserPassword($targetUserId, $newPassword, $mustChangePassword);

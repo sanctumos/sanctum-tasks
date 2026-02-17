@@ -64,6 +64,33 @@ function validatePassword(string $password): ?string {
     return null;
 }
 
+function generateTemporaryPassword(int $length = 16): string {
+    $length = max(PASSWORD_MIN_LENGTH, $length);
+    $upper = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+    $lower = 'abcdefghijkmnopqrstuvwxyz';
+    $digits = '23456789';
+    $all = $upper . $lower . $digits;
+
+    $chars = [
+        $upper[random_int(0, strlen($upper) - 1)],
+        $lower[random_int(0, strlen($lower) - 1)],
+        $digits[random_int(0, strlen($digits) - 1)],
+    ];
+
+    for ($i = count($chars); $i < $length; $i++) {
+        $chars[] = $all[random_int(0, strlen($all) - 1)];
+    }
+
+    for ($i = count($chars) - 1; $i > 0; $i--) {
+        $j = random_int(0, $i);
+        $tmp = $chars[$i];
+        $chars[$i] = $chars[$j];
+        $chars[$j] = $tmp;
+    }
+
+    return implode('', $chars);
+}
+
 function normalizeRole(string $role): ?string {
     $allowed = ['admin', 'manager', 'member', 'api'];
     $role = strtolower(trim($role));
