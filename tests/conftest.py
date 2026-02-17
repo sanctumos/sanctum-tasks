@@ -7,7 +7,7 @@ import tempfile
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Any, Dict, Optional
 
 import pytest
 import requests
@@ -164,3 +164,173 @@ def api_headers(php_server: PhpServerContext) -> Dict[str, str]:
         "X-API-Key": php_server.api_key,
         "Content-Type": "application/json",
     }
+
+
+@dataclass
+class PythonServerContext:
+    process: subprocess.Popen
+    base_url: str
+    api_key: str
+    admin_username: str
+    admin_password: str
+    db_path: str
+    temp_dir: str
+
+    def stop(self) -> None:
+        if self.process.poll() is None:
+            self.process.terminate()
+            try:
+                self.process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                self.process.kill()
+                self.process.wait(timeout=5)
+        shutil.rmtree(self.temp_dir, ignore_errors=True)
+
+
+def _start_python_server(env_overrides: Dict[str, str]) -> PythonServerContext:
+    tmp_dir = tempfile.mkdtemp(prefix="tasks-python-tests-")
+    db_dir = Path(tmp_dir) / "db"
+    db_dir.mkdir(parents=True, exist_ok=True)
+    db_path = db_dir / "tasks_test.db"
+
+    admin_username = env_overrides.get("TASKS_BOOTSTRAP_ADMIN_USERNAME", "admin")
+    admin_password = env_overrides.get("TASKS_BOOTSTRAP_ADMIN_PASSWORD", "AdminPass123!")
+    api_key = env_overrides.get("TASKS_BOOTSTRAP_API_KEY", "b" * 64)
+
+    env = os.environ.copy()
+    env.update(
+        {
+            "TASKS_DB_PATH": str(db_path),
+            "TASKS_BOOTSTRAP_ADMIN_USERNAME": admin_username,
+            "TASKS_BOOTSTRAP_ADMIN_PASSWORD": admin_password,
+            "TASKS_BOOTSTRAP_API_KEY": api_key,
+            "TASKS_PASSWORD_COST": "8",
+            "TASKS_API_RATE_LIMIT_REQUESTS": "10000",
+            "TASKS_API_RATE_LIMIT_WINDOW_SECONDS": "60",
+            "TASKS_SESSION_COOKIE_SECURE": "0",
+            "TASKS_LOGIN_LOCK_THRESHOLD": "50",
+        }
+    )
+    env.update(env_overrides)
+
+    port = _pick_free_tcp_port()
+    base_url = f"http://127.0.0.1:{port}"
+    process = subprocess.Popen(
+        [
+            sys.executable,
+            "-m",
+            "uvicorn",
+            "api_python.main:app",
+            "--host",
+            "127.0.0.1",
+            "--port",
+            str(port),
+        ],
+        cwd=str(REPO_ROOT),
+        env=env,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
+    start = time.time()
+    last_error: Optional[Exception] = None
+    while time.time() - start < 12:
+        if process.poll() is not None:
+            break
+        try:
+            resp = requests.get(f"{base_url}/api/health.php", headers={"X-API-Key": api_key}, timeout=1.0)
+            if resp.status_code == 200:
+                return PythonServerContext(
+                    process=process,
+                    base_url=base_url,
+                    api_key=api_key,
+                    admin_username=admin_username,
+                    admin_password=admin_password,
+                    db_path=str(db_path),
+                    temp_dir=tmp_dir,
+                )
+        except Exception as exc:  # noqa: BLE001
+            last_error = exc
+        time.sleep(0.15)
+
+    if process.poll() is None:
+        process.terminate()
+        process.wait(timeout=5)
+    shutil.rmtree(tmp_dir, ignore_errors=True)
+    raise RuntimeError(f"Failed to start Python API server for tests: {last_error}")
+
+
+@pytest.fixture(scope="session")
+def python_server() -> PythonServerContext:
+    """Start real uvicorn process (slow; may fail on port/timeout). Prefer python_api_app for in-process tests."""
+    ctx = _start_python_server(
+        {
+            "TASKS_BOOTSTRAP_ADMIN_USERNAME": "admin",
+            "TASKS_BOOTSTRAP_ADMIN_PASSWORD": "AdminPass123!",
+            "TASKS_BOOTSTRAP_API_KEY": "a" * 64,
+        }
+    )
+    try:
+        yield ctx
+    finally:
+        ctx.stop()
+
+
+@dataclass
+class PythonApiAppContext:
+    """In-process Python API (TestClient + temp DB). No subprocess."""
+    client: "Any"
+    base_url: str
+    api_key: str
+    admin_username: str
+    admin_password: str
+    db_path: str
+    temp_dir: str
+
+
+@pytest.fixture(scope="session")
+def python_api_app() -> PythonApiAppContext:
+    """Python API via FastAPI TestClient with temp DB. Use for integration tests without starting uvicorn."""
+    import tempfile
+    from pathlib import Path
+    from fastapi.testclient import TestClient
+
+    tmp_dir = tempfile.mkdtemp(prefix="tasks-python-tests-")
+    db_dir = Path(tmp_dir) / "db"
+    db_dir.mkdir(parents=True, exist_ok=True)
+    db_path = db_dir / "tasks_test.db"
+    admin_username = "admin"
+    admin_password = "AdminPass123!"
+    api_key = "a" * 64
+
+    env = os.environ.copy()
+    env.update(
+        {
+            "TASKS_DB_PATH": str(db_path),
+            "TASKS_BOOTSTRAP_ADMIN_USERNAME": admin_username,
+            "TASKS_BOOTSTRAP_ADMIN_PASSWORD": admin_password,
+            "TASKS_BOOTSTRAP_API_KEY": api_key,
+            "TASKS_PASSWORD_COST": "8",
+            "TASKS_API_RATE_LIMIT_REQUESTS": "10000",
+            "TASKS_SESSION_COOKIE_SECURE": "0",
+        }
+    )
+    for k, v in env.items():
+        os.environ[k] = str(v)
+
+    try:
+        from api_python import db
+        from api_python.main import app
+        db.init_schema()
+        client = TestClient(app, base_url="http://testserver")
+        yield PythonApiAppContext(
+            client=client,
+            base_url="http://testserver",
+            api_key=api_key,
+            admin_username=admin_username,
+            admin_password=admin_password,
+            db_path=str(db_path),
+            temp_dir=tmp_dir,
+        )
+    finally:
+        shutil.rmtree(tmp_dir, ignore_errors=True)

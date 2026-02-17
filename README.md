@@ -78,10 +78,23 @@ Full endpoint reference: [docs/api.md](docs/api.md)
 ## Repository structure
 
 - `public/` - web-accessible PHP/UI/API code
+- `api_python/` - **Python API mirror** (agentic-first): same endpoints as PHP, same DB; see [api_python/README.md](api_python/README.md)
 - `db/` - SQLite database files and runtime secrets (ignored in git)
 - `docs/` - architecture, API, integration, and operational docs
 - `tasks_sdk/` - Python SDK
 - `smcp_plugin/tasks/` - SMCP CLI plugin
+
+## Running the Python API (agentic-first)
+
+You can run the Python API instead of (or alongside) the PHP API, using the same database and API contract:
+
+```bash
+pip install -r api_python/requirements.txt
+# Optional: TASKS_DB_PATH, TASKS_BOOTSTRAP_* (same as PHP)
+uvicorn api_python.main:app --host 127.0.0.1 --port 8000
+```
+
+Use `http://127.0.0.1:8000` as `base_url` with the existing SDK or API key. A small **TUI** for humans to peek at tasks: set `TASKS_API_KEY` and run `python -m api_python.cli list` or `python -m api_python.cli view <id>`. See [api_python/README.md](api_python/README.md) for env vars and details.
 
 ## Local development quick start
 
