@@ -110,4 +110,4 @@ Cursor CLI (e.g. via an SMCP plugin) is one possible implementation of that “p
 - **“Just heartbeat tasks”** = list tasks with `project=heartbeat` (and optional tag); other categories use other projects/tags.
 - All state and behavior are in **Sanctum Tasks** (tasks, project, status, assignee, body, API). External tools (e.g. Cursor CLI) are optional implementations of the work a heartbeat task performs.
 
-For workflow context (agent-only vs hybrid vs human-only), see [Workflows](WORKFLOWS.md).
+For workflow context (agent-only vs hybrid vs human-only), see [Workflows](WORKFLOWS.md). For building an interactive setup wizard that generates the runner and cron, see [Heartbeat wizard context and spec](HEARTBEAT_WIZARD_CONTEXT.md).

@@ -129,4 +129,5 @@ Bootstrap credentials/key are created at first run:
 - Integration walkthrough (admin -> API key -> SDK/plugin): [docs/integrations.md](docs/integrations.md)
 - Workflows (agent-only, hybrid, human-only): [docs/WORKFLOWS.md](docs/WORKFLOWS.md)
 - Heartbeat (open-claw pattern using Tasks): [docs/HEARTBEAT.md](docs/HEARTBEAT.md)
+- Heartbeat setup wizard (context and spec): [docs/HEARTBEAT_WIZARD_CONTEXT.md](docs/HEARTBEAT_WIZARD_CONTEXT.md) — run `./scripts/setup_heartbeat.sh` for an interactive bash wizard that writes a runner and optional cron.
 - Deployment structure: [docs/github-repository-setup-guide.md](docs/github-repository-setup-guide.md)
