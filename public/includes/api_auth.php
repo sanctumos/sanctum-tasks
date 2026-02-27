@@ -27,7 +27,7 @@ function apiError(string $code, string $message, int $statusCode = 400, array $d
 }
 
 function apiSuccess(array $payload = [], array $meta = [], int $statusCode = 200): void {
-    $response = array_merge(['success' => true], $payload);
+    $response = array_merge($payload, ['success' => true]);
     $response['data'] = $payload;
     if (!empty($meta)) {
         $response['meta'] = $meta;
