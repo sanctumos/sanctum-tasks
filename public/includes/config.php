@@ -187,6 +187,8 @@ function initializeDatabase() {
     } catch (Throwable $e) {
     }
 
+    $db->exec('BEGIN');
+    try {
     // Users
     $db->exec("
         CREATE TABLE IF NOT EXISTS users (
@@ -427,6 +429,11 @@ function initializeDatabase() {
         $ins->execute();
     }
 
+    $db->exec('COMMIT');
+    } catch (Throwable $e) {
+        $db->exec('ROLLBACK');
+        throw $e;
+    }
     $initialized = true;
 }
 
