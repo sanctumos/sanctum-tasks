@@ -319,24 +319,26 @@ function createTaskStatus(string $slug, string $label, int $sortOrder = 100, boo
     }
 
     $db = getDbConnection();
-    if ($isDefault) {
-        $db->exec("UPDATE task_statuses SET is_default = 0");
-    }
-    $stmt = $db->prepare("
-        INSERT INTO task_statuses (slug, label, sort_order, is_done, is_default)
-        VALUES (:slug, :label, :sort_order, :is_done, :is_default)
-    ");
-    $stmt->bindValue(':slug', $slug, SQLITE3_TEXT);
-    $stmt->bindValue(':label', truncateString($label, 60), SQLITE3_TEXT);
-    $stmt->bindValue(':sort_order', $sortOrder, SQLITE3_INTEGER);
-    $stmt->bindValue(':is_done', $isDone ? 1 : 0, SQLITE3_INTEGER);
-    $stmt->bindValue(':is_default', $isDefault ? 1 : 0, SQLITE3_INTEGER);
-
+    $db->exec('BEGIN');
     try {
+        if ($isDefault) {
+            $db->exec("UPDATE task_statuses SET is_default = 0");
+        }
+        $stmt = $db->prepare("
+            INSERT INTO task_statuses (slug, label, sort_order, is_done, is_default)
+            VALUES (:slug, :label, :sort_order, :is_done, :is_default)
+        ");
+        $stmt->bindValue(':slug', $slug, SQLITE3_TEXT);
+        $stmt->bindValue(':label', truncateString($label, 60), SQLITE3_TEXT);
+        $stmt->bindValue(':sort_order', $sortOrder, SQLITE3_INTEGER);
+        $stmt->bindValue(':is_done', $isDone ? 1 : 0, SQLITE3_INTEGER);
+        $stmt->bindValue(':is_default', $isDefault ? 1 : 0, SQLITE3_INTEGER);
         $stmt->execute();
+        $db->exec('COMMIT');
         createAuditLog(null, 'task_status.create', 'task_status', $slug, ['label' => $label]);
         return ['success' => true, 'slug' => $slug];
     } catch (Throwable $e) {
+        $db->exec('ROLLBACK');
         return ['success' => false, 'error' => 'Status slug already exists'];
     }
 }
