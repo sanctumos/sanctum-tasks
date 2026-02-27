@@ -65,8 +65,8 @@ function requireAuth(): void {
 
 function requireAdmin(): void {
     requireAuth();
-    $role = (string)($_SESSION['role'] ?? '');
-    if (!isAdminRole($role)) {
+    $user = getCurrentUser();
+    if (!$user || !isAdminRole((string)$user['role'])) {
         http_response_code(403);
         die('Admin role required');
     }
@@ -144,6 +144,8 @@ function getCurrentUser(): ?array {
         logout();
         return null;
     }
+    $_SESSION['role'] = $user['role'];
+    $_SESSION['must_change_password'] = (int)$user['must_change_password'] === 1 ? 1 : 0;
     return $user;
 }
 
