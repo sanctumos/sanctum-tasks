@@ -180,6 +180,12 @@ function initializeDatabase() {
     }
 
     $db = getDbConnection();
+    try {
+        $db->querySingle("SELECT 1 FROM task_statuses LIMIT 1");
+        $initialized = true;
+        return;
+    } catch (Throwable $e) {
+    }
 
     // Users
     $db->exec("
