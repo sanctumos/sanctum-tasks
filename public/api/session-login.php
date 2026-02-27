@@ -11,7 +11,19 @@ if ($body === null) {
     apiError('validation.invalid_json', 'Invalid JSON body', 400);
 }
 if ($body === []) {
-    $body = $_POST;
+    apiError('validation.body_required', 'Request body must be JSON with username and password', 400);
+}
+
+// Optional origin check: when Origin/Referer is sent (browser), require same-origin to prevent login CSRF
+$origin = trim((string)($_SERVER['HTTP_ORIGIN'] ?? ''));
+if ($origin !== '') {
+    $allowed = configuredAppOrigin();
+    if ($allowed === null) {
+        $allowed = requestOrigin();
+    }
+    if ($allowed !== null && $origin !== $allowed) {
+        apiError('auth.origin_mismatch', 'Request origin is not allowed', 403);
+    }
 }
 
 $username = (string)($body['username'] ?? '');

@@ -49,6 +49,32 @@ def _extract_mfa_secret(html: str) -> str:
     return matches[0]
 
 
+def test_session_login_requires_json_body(php_server):
+    """Session login must receive JSON body; empty or form body is rejected (H-01)."""
+    base_url = php_server.base_url
+
+    empty_json = requests.post(
+        _api_url(base_url, "/api/session-login.php"),
+        json={},
+        headers={"Content-Type": "application/json"},
+        timeout=5,
+    )
+    assert empty_json.status_code == 400
+    assert empty_json.json().get("error_object", {}).get("code") == "validation.body_required"
+
+    form_body = requests.post(
+        _api_url(base_url, "/api/session-login.php"),
+        data={"username": php_server.admin_username, "password": php_server.admin_password},
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+        timeout=5,
+    )
+    assert form_body.status_code == 400
+    assert form_body.json().get("error_object", {}).get("code") in (
+        "validation.body_required",
+        "validation.invalid_json",
+    )
+
+
 def test_health_requires_auth_and_emits_rate_headers(php_server):
     base_url = php_server.base_url
 
