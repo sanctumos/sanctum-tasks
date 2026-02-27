@@ -129,7 +129,7 @@ def test_main_describe_outputs_valid_json(monkeypatch: pytest.MonkeyPatch, capsy
     stdout = capsys.readouterr().out
     payload = json.loads(stdout)
     assert payload["plugin"]["name"] == "tasks"
-    assert payload["plugin"]["version"] == "0.2.2"
+    assert payload["plugin"]["version"] == "0.2.3"
 
 
 def test_main_parses_create_task_extended_options(monkeypatch: pytest.MonkeyPatch):

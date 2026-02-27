@@ -127,4 +127,6 @@ Bootstrap credentials/key are created at first run:
 - API: [docs/api.md](docs/api.md)
 - Development, schema/migrations, backups, CI/testing: [docs/development.md](docs/development.md)
 - Integration walkthrough (admin -> API key -> SDK/plugin): [docs/integrations.md](docs/integrations.md)
+- Workflows (agent-only, hybrid, human-only): [docs/WORKFLOWS.md](docs/WORKFLOWS.md)
+- Heartbeat (open-claw pattern using Tasks): [docs/HEARTBEAT.md](docs/HEARTBEAT.md)
 - Deployment structure: [docs/github-repository-setup-guide.md](docs/github-repository-setup-guide.md)

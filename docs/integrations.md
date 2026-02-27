@@ -84,6 +84,8 @@ API endpoints:
 2. Human reviews in admin UI and updates details.
 3. Agent polls `list-tasks.php` and closes loop automatically.
 
+**See also:** [WORKFLOWS.md](WORKFLOWS.md) (agent-only, hybrid, human-only) and [HEARTBEAT.md](HEARTBEAT.md) (open-claw heartbeat using Tasks).
+
 ## 5) Operational recommendations
 
 - Rotate API keys regularly (`revoke-api-key.php` + create new).
