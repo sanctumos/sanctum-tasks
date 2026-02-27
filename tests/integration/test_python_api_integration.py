@@ -215,8 +215,10 @@ def test_python_create_user_disable_reset_password(python_api_app):
     assert r.status_code == 200
     r = client.post("/api/reset-user-password.php", headers=headers, json={"id": uid, "must_change_password": False})
     assert r.status_code == 200
-    data = r.json().get("data") or r.json()
-    assert "temporary_password" in data
+    j = r.json()
+    assert j.get("success") is True
+    assert "id" in j
+    assert "temporary_password" not in j
 
 
 def test_python_api_keys(python_api_app):

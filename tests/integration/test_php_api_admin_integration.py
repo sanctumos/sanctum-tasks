@@ -595,7 +595,10 @@ def test_bulk_status_user_and_api_key_lifecycle_endpoints(php_server):
         timeout=5,
     )
     assert reset_password_resp.status_code == 200
-    assert reset_password_resp.json()["temporary_password"]
+    data = reset_password_resp.json()
+    assert data.get("success") is True
+    assert "id" in data
+    assert "temporary_password" not in data
 
     disable_resp = requests.post(
         _api_url(base_url, "/api/disable-user.php"),

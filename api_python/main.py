@@ -636,8 +636,8 @@ async def reset_user_password_route(request: Request, user: dict = Depends(auth.
     logic.audit.create_audit_log(int(user["id"]), "api.user_password_reset", "user", str(target_user_id), {"must_change_password": 1 if must_change_password else 0})
     return response.json_success(request, {
         "id": target_user_id,
-        "temporary_password": new_password,
         "must_change_password": 1 if must_change_password else 0,
+        "message": "Password reset. Use a secure channel to communicate the new credentials to the user.",
     })
 
 

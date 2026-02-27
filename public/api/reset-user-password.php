@@ -32,6 +32,6 @@ createAuditLog((int)$apiUser['id'], 'api.user_password_reset', 'user', (string)$
 
 apiSuccess([
     'id' => $targetUserId,
-    'temporary_password' => $newPassword,
     'must_change_password' => $mustChangePassword ? 1 : 0,
+    'message' => 'Password reset. Use a secure channel to communicate the new credentials to the user.',
 ]);

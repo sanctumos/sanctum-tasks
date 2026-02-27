@@ -56,9 +56,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         $result = resetUserPassword($userId, $newPassword, true);
         if ($result['success']) {
-            $message = 'Password reset successfully';
+            $message = 'Password reset successfully. Communicate the new password to the user via a secure channel.';
             $messageType = 'success';
-            $temporaryPassword = $newPassword;
             createAuditLog((int)$currentUser['id'], 'admin.user_password_reset', 'user', (string)$userId);
         } else {
             $message = $result['error'] ?? 'Failed to reset password';
@@ -79,15 +78,7 @@ require __DIR__ . '/_layout_top.php';
 </div>
 
 <?php if ($message): ?>
-    <div class="alert alert-<?= htmlspecialchars($messageType) ?>">
-        <?= htmlspecialchars($message) ?>
-        <?php if ($temporaryPassword): ?>
-            <div class="mt-2">
-                Temporary password:
-                <code><?= htmlspecialchars($temporaryPassword) ?></code>
-            </div>
-        <?php endif; ?>
-    </div>
+    <div class="alert alert-<?= htmlspecialchars($messageType) ?>"><?= htmlspecialchars($message) ?></div>
 <?php endif; ?>
 
 <div class="card shadow-sm mb-4">
