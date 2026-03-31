@@ -129,7 +129,7 @@ def test_main_describe_outputs_valid_json(monkeypatch: pytest.MonkeyPatch, capsy
     stdout = capsys.readouterr().out
     payload = json.loads(stdout)
     assert payload["plugin"]["name"] == "tasks"
-    assert payload["plugin"]["version"] == "0.2.5"
+    assert payload["plugin"]["version"] == "0.3.0"
 
 
 def test_main_parses_create_task_extended_options(monkeypatch: pytest.MonkeyPatch):
@@ -179,6 +179,11 @@ def test_get_plugin_description_tracks_parser_arguments():
     payload = cli.get_plugin_description(cli.build_parser())
     commands = {item["name"]: item for item in payload["commands"]}
 
+    assert "health" in commands
+    assert "search-tasks" in commands
+    assert "list-audit-logs" in commands
+    assert len(commands) == len(cli.command_handlers())
+
     create_params = {param["name"] for param in commands["create-task"]["parameters"]}
     update_params = {param["name"] for param in commands["update-task"]["parameters"]}
     list_params = {param["name"] for param in commands["list-tasks"]["parameters"]}
@@ -195,6 +200,8 @@ def test_get_plugin_description_tracks_parser_arguments():
     }.issubset(create_params)
     assert {"task-id", "clear-body", "unassign", "priority", "project"}.issubset(update_params)
     assert {"q", "sort-by", "sort-dir", "priority", "project", "limit", "offset"}.issubset(list_params)
+    assert "created-by-user-id" in list_params
+    assert "no-include-relations" in {p["name"] for p in commands["get-task"]["parameters"]}
 
     api_key_param = next(
         param for param in commands["create-task"]["parameters"] if param["name"] == "api-key"
