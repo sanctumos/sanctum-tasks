@@ -19,7 +19,7 @@ This document satisfies three requests: (1) inventory and sync state for Sanctum
 | `/root/projects/sanctum/sanctum-tasks` | Additional mirror under `sanctum/` | Same — **already up to date** |
 | `/root/projects/sanctumos/*` (broca, smcp, sanctum-router, etc.) | Separate git roots; not a monorepo | Example: `broca`, `sanctum-tasks` pulled — **up to date** |
 
-**Note:** There is **no** single `.git` at `/root/projects/sanctumos`; the organization is represented as **many sibling repositories**. Keeping “sanctum” synchronized means periodically `git fetch` / `git pull` on each repo you care about, or a small manifest script (out of scope here unless requested).
+**Note:** There is **no** single `.git` at `/root/projects/sanctumos`; the organization is represented as **many sibling repositories**. For **this** product only, use `tools/sync-sanctum-tasks-clones.sh` (optionally set `SANCTUM_TASKS_MIRROR_PATHS` to space-separated extra clone directories). Org-wide multi-repo sync remains a workspace-level concern if you want one manifest for all `sanctumos/*` checkouts.
 
 **Related but distinct:** Broca (`sanctumos/broca`) uses SQLite `messages` / `queue` for agent traffic — not the same domain as task **work items**, though product UX might someday link “notifications” to Broca; this plan does not assume that coupling.
 
@@ -214,8 +214,37 @@ Each phase should keep **API backward compatibility** (nullable FKs, defaults).
 
 ---
 
-## 9. Open questions for Mark
+## 9. Resolved decisions (no longer blocking)
 
-1. Should the overlay live **only** in `sanctum-tasks`, or ship as a **separate static bundle** consumed by PHP includes?  
-2. Trademark: acceptable **in-repo codename** vs user-visible “Basecamp-style” wording?  
-3. Is **multi-repo** `sanctumos` sync automation (manifest + script) desired as a follow-up task?
+These were listed as open questions; defaults are fixed so implementation can proceed without another planning round.
+
+### 9.1 Where the overlay lives
+
+**Decision:** Ship **inside this repository** under `public/` (same deploy unit as today), implemented as additional PHP routes/layouts that reuse `includes/auth.php`, `includes/functions.php`, and existing APIs.
+
+**Rationale:** Workspace web rules assume **application-level** delivery under `public/` without relying on separate nginx routes or a second deployable. A separate npm/Vite “static bundle” is **optional later** if you want a richer client (e.g. Kanban drag UX); if added, compiled assets still land under `public/` (e.g. `public/assets/overlay/`) and remain single-repo. **Do not** require a second origin or CDN as the default path.
+
+### 9.2 Naming and trademarks
+
+**Decision:**
+
+- **Planning / engineering docs** (this file, ADRs, tickets): continue to say “Basecamp 3” where you mean the **product reference model** — factual comparison, not affiliation.
+- **In-repo code identifiers** (dirs, CSS prefixes, feature flags): use a **neutral codename**, e.g. `ui_layout_calm` or `overlay_camp` — not “basecamp” in slug form.
+- **User-visible UI copy** (buttons, settings labels): use **neutral** language such as “Calm dashboard”, “Classic layout”, or “Assignments-first home” — **not** “Basecamp” unless you have explicit legal/comms approval to imply endorsement.
+
+### 9.3 Multi-repo sync automation
+
+**Decision:** **Optional script shipped in-repo** — see `tools/sync-sanctum-tasks-clones.sh`. It always syncs the repo it lives in; optionally pulls extra clone paths via `SANCTUM_TASKS_MIRROR_PATHS` (space-separated absolute paths). A full **sanctumos org** manifest across dozens of repos belongs in a **workspace-level** automation repo or dotfiles if you want one button for everything; that is out of scope for the tasks product itself.
+
+---
+
+## 10. Research gaps closed (post-plan verification)
+
+| Gap | Resolution |
+|-----|------------|
+| **Workspace mirrors behind `main`** | After the planning commit, `/root/projects/sanctumos/sanctum-tasks` and `/root/projects/sanctum/sanctum-tasks` were **fast-forwarded** to the same `origin/main` as `/root/projects/sanctum-tasks`. Ongoing: run `tools/sync-sanctum-tasks-clones.sh` or `git pull` in each checkout you actually use. |
+| **`bc3-api` repo title vs “Basecamp 3”** | Upstream README is branded generically (“The Basecamp API”) but examples use **`https://3.basecampapi.com/`**. The domain model (recordings, dock, todoset → list → todo) is the correct reference for a **“BC3-style”** mental model; version renumbering on GitHub does not change the integration surface for this plan. |
+| **Who sees `ui_mode`?** | Overlay is **browser session / cookie** UX for humans using admin. **API-key clients** (agents, SDK) do not need layout mode; if a future SPA reads prefs, expose `ui_layout` (or equivalent) on **`GET /api/session-me.php`** and mirror it in **`api_python`** `session-me` for parity. |
+| **Preference storage shape** | Prefer a single nullable column on **`users`**, e.g. `ui_layout TEXT NOT NULL DEFAULT 'default'`, constrained in app code to known values — simpler than a new `user_preferences` table for one enum. If many prefs appear later, migrate to `preferences_json` in an idempotent step. |
+| **Authorization** | Overlay routes must call the **same** `requireAuth()` / role checks as current admin pages — no second permission model. |
+| **Rich text vs `body`** | Sanctum `tasks.body` is plain text in practice; Basecamp messages use HTML rich text. Any “message board feel” in the overlay is **presentation-only** unless you scope a separate rich-text storage project. |
