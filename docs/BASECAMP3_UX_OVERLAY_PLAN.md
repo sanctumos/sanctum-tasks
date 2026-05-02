@@ -154,7 +154,7 @@ Legend: **Y** = good enough for a BC3-*style* presentation of that slice; **P** 
 ### 6.1 Product definition
 
 - **Overlay** = alternate presentation layer (layouts, navigation, copy, density) that consumes the **same** JSON/API and session auth as today.
-- **Optional** = per-user preference: default remains current Bootstrap admin unless the user enables “Basecamp-style” (working name; avoid trademark issues in shipped strings — e.g. “Calm classic”, “Camp layout”, or licensed branding if Mark chooses).
+- **Optional** = per-user preference: default remains current Bootstrap admin unless the user enables a **Basecamp-style** layout (or similar label — see §9.2).
 - **Install** = preference stored **per deployment user** after login (and optionally exposed as a query param for demos), not a separate npm “package” unless you later split front-end assets.
 
 ### 6.2 Suggested implementation shape (phased)
@@ -181,7 +181,7 @@ Each phase should keep **API backward compatibility** (nullable FKs, defaults).
 ### 6.3 Visual and interaction notes
 
 - Basecamp 3 emphasizes **low noise**, strong hierarchy, card-like **projects**, and **assignments-first** home. Sanctum can mimic **structure**, not pixel-perfect CSS, unless you want to invest in a dedicated design system.
-- Respect licensing: do not copy proprietary assets; “inspired-by” layout and neutral iconography.
+- Respect licensing: do not copy proprietary **assets** (logos, art, lifted stylesheets); original layout and iconography. Naming may follow the Basecamp-inspired scheme (see §9.2).
 
 ### 6.4 Testing and verification
 
@@ -224,13 +224,13 @@ These were listed as open questions; defaults are fixed so implementation can pr
 
 **Rationale:** Workspace web rules assume **application-level** delivery under `public/` without relying on separate nginx routes or a second deployable. A separate npm/Vite “static bundle” is **optional later** if you want a richer client (e.g. Kanban drag UX); if added, compiled assets still land under `public/` (e.g. `public/assets/overlay/`) and remain single-repo. **Do not** require a second origin or CDN as the default path.
 
-### 9.2 Naming and trademarks
+### 9.2 Naming (product owner preference)
 
-**Decision:**
+**Decision:** This repo is **free software** (AGPL). Mark is comfortable **adopting Basecamp-inspired naming** in docs, code, and UI where it helps users and contributors recognize the metaphor (e.g. “Basecamp-style layout”, `bc3_overlay`, “Hey-style” notifications menu, dock terminology in comments).
 
-- **Planning / engineering docs** (this file, ADRs, tickets): continue to say “Basecamp 3” where you mean the **product reference model** — factual comparison, not affiliation.
-- **In-repo code identifiers** (dirs, CSS prefixes, feature flags): use a **neutral codename**, e.g. `ui_layout_calm` or `overlay_camp` — not “basecamp” in slug form.
-- **User-visible UI copy** (buttons, settings labels): use **neutral** language such as “Calm dashboard”, “Classic layout”, or “Assignments-first home” — **not** “Basecamp” unless you have explicit legal/comms approval to imply endorsement.
+**Still do not:** copy **proprietary assets** (logos, artwork, exact CSS/markup lifted from Basecamp’s shipped product) or pass the work off as an official 37signals product. Prefer original assets and implementation; **names and UX vocabulary** that describe the pattern are fine for this project.
+
+**Note:** Third-party trademarks remain their owners’ marks; this is a **practical open-source stance**, not legal advice. If you ever redistribute binaries or listings on stores that police naming, re-check their rules.
 
 ### 9.3 Multi-repo sync automation
 
