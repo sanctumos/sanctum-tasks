@@ -423,6 +423,9 @@ function listUsers(bool $includeDisabled = false): array {
 }
 
 function createUser(string $username, string $password, string $role = 'member', bool $mustChangePassword = true, ?int $orgId = null, string $personKind = 'team_member'): array {
+    $db0 = getDbConnection();
+    ensureDefaultOrganizationAndUsers($db0);
+
     $usernameError = validateUsername($username);
     if ($usernameError) {
         return ['success' => false, 'error' => $usernameError];

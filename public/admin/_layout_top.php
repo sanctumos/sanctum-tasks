@@ -15,6 +15,7 @@ require_once __DIR__ . '/../includes/auth.php';
         <a class="navbar-brand" href="/admin/">Tasks Admin</a>
         <div class="d-flex gap-2">
             <?php if (isLoggedIn()): ?>
+                <a class="btn btn-sm btn-outline-light" href="/admin/workspace-projects.php">Workspace projects</a>
                 <?php if (isAdminRole((string)($_SESSION['role'] ?? ''))): ?>
                     <a class="btn btn-sm btn-outline-light" href="/admin/users.php">Users</a>
                     <a class="btn btn-sm btn-outline-light" href="/admin/api-keys.php">API Keys</a>
