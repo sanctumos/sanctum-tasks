@@ -31,3 +31,7 @@ Thumbs.db
 # Playwright design-smoke screenshot output (regenerate locally)
 tools/design-smoke/output/
 
+# PHP (Composer / PHPUnit)
+vendor/
+.phpunit.cache/
+

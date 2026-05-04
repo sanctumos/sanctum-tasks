@@ -1,0 +1,28 @@
+{
+    "name": "sanctumos/sanctum-tasks",
+    "description": "Sanctum Tasks — PHP production surface test tooling",
+    "license": "MIT",
+    "require": {},
+    "require-dev": {
+        "guzzlehttp/guzzle": "^7.9",
+        "phpunit/phpunit": "^11.5",
+        "symfony/process": "^7.2"
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "SanctumTasks\\Tests\\": "tests/php/"
+        }
+    },
+    "config": {
+        "sort-packages": true,
+        "allow-plugins": {}
+    },
+    "scripts": {
+        "phpunit": "phpunit",
+        "test:php": "@php vendor/bin/phpunit",
+        "test:php:unit": "@php vendor/bin/phpunit --testsuite unit",
+        "test:php:integration": "@php vendor/bin/phpunit --testsuite integration",
+        "test:php:e2e": "@php vendor/bin/phpunit --testsuite e2e",
+        "test:php:coverage": "@php -d pcov.enabled=1 vendor/bin/phpunit tests/php/Unit tests/php/Integration --coverage-text --coverage-filter=public/includes --coverage-filter=public/api --coverage-filter=public/admin"
+    }
+}

@@ -15,7 +15,24 @@ jobs:
         uses: shivammathur/setup-php@v2
         with:
           php-version: "8.2"
-          extensions: sqlite3
+          extensions: sqlite3, pcov
+          coverage: pcov
+
+      - name: Install PHP dependencies
+        run: |
+          set -euo pipefail
+          cd "${GITHUB_WORKSPACE:-.}"
+          composer install --no-interaction --prefer-dist
+
+      - name: PHP unit and integration tests
+        run: |
+          set -euo pipefail
+          composer run test:php
+
+      - name: PHP line coverage (target benchmark in docs/PHP_TEST_BENCHMARK.md)
+        run: |
+          set -euo pipefail
+          composer run test:php:coverage
 
       - name: Setup Python
         uses: actions/setup-python@v5
