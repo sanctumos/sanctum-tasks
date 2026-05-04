@@ -31,12 +31,14 @@ PAGES = [
     ("/admin/project.php?id=1&tab=members", "07_project_members"),
     ("/admin/project.php?id=1&tab=settings", "08_project_settings"),
     ("/admin/users.php", "09_users"),
-    ("/admin/settings.php", "10_settings_password"),
-    ("/admin/settings.php?tab=mfa", "11_settings_mfa"),
-    ("/admin/settings.php?tab=api-keys", "12_settings_api_keys"),
-    ("/admin/settings.php?tab=audit", "13_settings_audit"),
-    ("/admin/view.php?id=1", "14_task_view"),
-    ("/", "15_root_landing"),
+    ("/admin/organizations.php", "10_organizations"),
+    ("/admin/user-projects.php?id=1", "11_user_projects"),
+    ("/admin/settings.php", "12_settings_password"),
+    ("/admin/settings.php?tab=mfa", "13_settings_mfa"),
+    ("/admin/settings.php?tab=api-keys", "14_settings_api_keys"),
+    ("/admin/settings.php?tab=audit", "15_settings_audit"),
+    ("/admin/view.php?id=1", "16_task_view"),
+    ("/", "17_root_landing"),
 ]
 
 

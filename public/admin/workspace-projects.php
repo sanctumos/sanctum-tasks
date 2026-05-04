@@ -43,6 +43,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 $projects = listDirectoryProjectsForUser($currentUser, 300);
 
+$orgLabel = '';
+$oid = isset($currentUser['org_id']) ? (int)$currentUser['org_id'] : 0;
+if ($oid > 0 && ($og = getOrganizationById($oid))) {
+    $orgLabel = (string)$og['name'];
+}
+
 $pageTitle = 'Projects';
 require __DIR__ . '/_layout_top.php';
 ?>
@@ -52,7 +58,10 @@ require __DIR__ . '/_layout_top.php';
 <div class="page-header">
     <div class="page-header__title">
         <h1>Projects</h1>
-        <div class="subtitle"><?= count($projects) ?> in your directory</div>
+        <div class="subtitle">
+            <?php if ($orgLabel !== ''): ?><span class="text-body"><?= htmlspecialchars($orgLabel) ?></span> · <?php endif; ?>
+            <?= count($projects) ?> <?= $orgLabel !== '' ? 'you can access' : 'in your directory' ?>
+        </div>
     </div>
     <div class="page-header__actions">
         <button class="btn btn-primary btn-sm" type="button" data-bs-toggle="modal" data-bs-target="#newProjectModal"><i class="bi bi-plus-lg me-1"></i>New project</button>

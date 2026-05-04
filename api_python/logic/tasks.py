@@ -17,7 +17,6 @@ from .statuses import sanitize_status, get_default_task_status_slug
 from .users import get_user_by_id
 from . import audit
 from . import workspace as workspace_module
-from .. import auth as auth_module
 
 
 def task_order_by_clause(sort_by: str, sort_dir: str) -> str:
@@ -134,18 +133,49 @@ def list_task_watchers(task_id: int) -> list[dict]:
     return rows
 
 
-def user_can_access_task(user_id: int, task: dict, role: str) -> bool:
-    if auth_module.is_admin_role(role):
+def task_user_is_watcher(task_id: int, user_id: int) -> bool:
+    if task_id <= 0 or user_id <= 0:
+        return False
+    conn = db.get_connection()
+    cur = conn.execute(
+        "SELECT 1 FROM task_watchers WHERE task_id = ? AND user_id = ? LIMIT 1",
+        (task_id, user_id),
+    )
+    ok = cur.fetchone() is not None
+    conn.close()
+    return ok
+
+
+def user_can_access_task_for_viewer(viewer: dict, task: dict) -> bool:
+    """Mirrors PHP userCanAccessTaskForViewer."""
+    if workspace_module.user_has_unrestricted_org_directory_access(viewer):
         return True
-    created_by = int(task.get("created_by_user_id", 0))
-    assigned_to = int(task.get("assigned_to_user_id", 0))
-    return created_by == user_id or assigned_to == user_id
+    uid = int(viewer["id"])
+    pid = int(task.get("project_id") or 0)
+    if pid > 0:
+        proj = workspace_module.get_directory_project_by_id(pid)
+        if proj and workspace_module.user_can_access_directory_project(viewer, proj):
+            return True
+    if int(task.get("created_by_user_id") or 0) == uid:
+        return True
+    if int(task.get("assigned_to_user_id") or 0) == uid:
+        return True
+    return task_user_is_watcher(int(task.get("id") or 0), uid)
+
+
+def user_can_access_task(user_id: int, task: dict, role: str) -> bool:
+    del role
+    viewer = get_user_by_id(user_id, False)
+    if not viewer:
+        return False
+    return user_can_access_task_for_viewer(viewer, task)
 
 
 def list_tasks(
     filters: dict,
     with_pagination: bool = False,
     api_user: dict | None = None,
+    directory_scope_user: dict | None = None,
 ) -> list[dict] | dict:
     db.init_schema()
     conn = db.get_connection()
@@ -213,10 +243,22 @@ def list_tasks(
             where_clauses.append("t.due_at IS NOT NULL AND t.due_at >= ?")
             params.append(due_after)
 
-    if api_user and not auth_module.is_admin_role(str(api_user.get("role", ""))):
-        uid = int(api_user["id"])
-        where_clauses.append("(t.created_by_user_id = ? OR t.assigned_to_user_id = ?)")
-        params.extend([uid, uid])
+    scope_user = directory_scope_user if directory_scope_user is not None else api_user
+    if scope_user is not None and not workspace_module.user_has_unrestricted_org_directory_access(scope_user):
+        r_uid = int(scope_user["id"])
+        accessible = [int(r["id"]) for r in workspace_module.list_directory_projects_for_user(scope_user, 500)]
+        if not accessible:
+            where_clauses.append(
+                "(t.project_id IS NULL AND (t.created_by_user_id = ? OR t.assigned_to_user_id = ?))"
+            )
+            params.extend([r_uid, r_uid])
+        else:
+            placeholders = ",".join(["?"] * len(accessible))
+            where_clauses.append(
+                f"((t.project_id IS NULL AND (t.created_by_user_id = ? OR t.assigned_to_user_id = ?)) OR "
+                f"(t.project_id IS NOT NULL AND t.project_id IN ({placeholders})))"
+            )
+            params.extend([r_uid, r_uid, *accessible])
 
     limit = int(filters.get("limit", 100))
     offset = int(filters.get("offset", 0))

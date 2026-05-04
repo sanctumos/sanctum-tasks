@@ -131,6 +131,11 @@ foreach ($projectTasks as $t) {
 
 $users = listUsers(false);
 
+$projectOrgName = '';
+if (!empty($project['org_id']) && ($porg = getOrganizationById((int)$project['org_id']))) {
+    $projectOrgName = (string)$porg['name'];
+}
+
 $pageTitle = $project['name'];
 require __DIR__ . '/_layout_top.php';
 
@@ -148,6 +153,7 @@ function st_tab_link(string $tab, string $active, string $label, string $icon, ?
     <div class="page-header__title">
         <h1><?= htmlspecialchars($project['name']) ?></h1>
         <div class="subtitle">
+            <?php if ($projectOrgName !== ''): ?><i class="bi bi-building"></i> <?= htmlspecialchars($projectOrgName) ?> · <?php endif; ?>
             <?php if (!empty($project['description'])): ?><?= htmlspecialchars($project['description']) ?> · <?php endif; ?>
             <span class="status-pill status-pill--<?= $project['status'] === 'active' ? 'doing' : ($project['status'] === 'archived' ? 'todo' : 'blocked') ?>"><?= htmlspecialchars((string)$project['status']) ?></span>
             <?php if (!empty($project['all_access'])): ?> · <i class="bi bi-globe"></i> all-access<?php endif; ?>

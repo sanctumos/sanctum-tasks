@@ -360,8 +360,8 @@ function getDefaultOrganizationId(): ?int {
 function getUserById($id, bool $includeSensitive = false): ?array {
     $db = getDbConnection();
     $sql = $includeSensitive
-        ? "SELECT id, username, role, is_active, must_change_password, mfa_enabled, mfa_secret, password_hash, org_id, person_kind, created_at FROM users WHERE id = :id LIMIT 1"
-        : "SELECT id, username, role, is_active, must_change_password, mfa_enabled, org_id, person_kind, created_at FROM users WHERE id = :id LIMIT 1";
+        ? "SELECT id, username, role, is_active, must_change_password, mfa_enabled, mfa_secret, password_hash, org_id, person_kind, limited_project_access, created_at FROM users WHERE id = :id LIMIT 1"
+        : "SELECT id, username, role, is_active, must_change_password, mfa_enabled, org_id, person_kind, limited_project_access, created_at FROM users WHERE id = :id LIMIT 1";
     $stmt = $db->prepare($sql);
     $stmt->bindValue(':id', (int)$id, SQLITE3_INTEGER);
     $res = $stmt->execute();
@@ -374,6 +374,7 @@ function getUserById($id, bool $includeSensitive = false): ?array {
             $row['org_id'] = (int)$row['org_id'];
         }
         $row['person_kind'] = normalizePersonKind($row['person_kind'] ?? 'team_member');
+        $row['limited_project_access'] = (int)($row['limited_project_access'] ?? 0);
     }
     return $row;
 }
@@ -381,8 +382,8 @@ function getUserById($id, bool $includeSensitive = false): ?array {
 function getUserByUsername($username, bool $includeSensitive = false): ?array {
     $db = getDbConnection();
     $sql = $includeSensitive
-        ? "SELECT id, username, role, is_active, must_change_password, mfa_enabled, mfa_secret, password_hash, org_id, person_kind, created_at FROM users WHERE username = :u LIMIT 1"
-        : "SELECT id, username, role, is_active, must_change_password, mfa_enabled, org_id, person_kind, created_at FROM users WHERE username = :u LIMIT 1";
+        ? "SELECT id, username, role, is_active, must_change_password, mfa_enabled, mfa_secret, password_hash, org_id, person_kind, limited_project_access, created_at FROM users WHERE username = :u LIMIT 1"
+        : "SELECT id, username, role, is_active, must_change_password, mfa_enabled, org_id, person_kind, limited_project_access, created_at FROM users WHERE username = :u LIMIT 1";
     $stmt = $db->prepare($sql);
     $stmt->bindValue(':u', normalizeUsername((string)$username), SQLITE3_TEXT);
     $res = $stmt->execute();
@@ -395,6 +396,7 @@ function getUserByUsername($username, bool $includeSensitive = false): ?array {
             $row['org_id'] = (int)$row['org_id'];
         }
         $row['person_kind'] = normalizePersonKind($row['person_kind'] ?? 'team_member');
+        $row['limited_project_access'] = (int)($row['limited_project_access'] ?? 0);
     }
     return $row;
 }
@@ -402,10 +404,12 @@ function getUserByUsername($username, bool $includeSensitive = false): ?array {
 function listUsers(bool $includeDisabled = false): array {
     $db = getDbConnection();
     $sql = "
-        SELECT id, username, role, is_active, must_change_password, mfa_enabled, org_id, person_kind, created_at
-        FROM users
-        " . ($includeDisabled ? "" : "WHERE is_active = 1") . "
-        ORDER BY username ASC
+        SELECT u.id, u.username, u.role, u.is_active, u.must_change_password, u.mfa_enabled, u.org_id, u.person_kind, u.limited_project_access, u.created_at,
+               o.name AS org_name
+        FROM users u
+        LEFT JOIN organizations o ON o.id = u.org_id
+        " . ($includeDisabled ? "" : "WHERE u.is_active = 1") . "
+        ORDER BY u.username ASC
     ";
     $res = $db->query($sql);
     $users = [];
@@ -417,12 +421,13 @@ function listUsers(bool $includeDisabled = false): array {
             $row['org_id'] = (int)$row['org_id'];
         }
         $row['person_kind'] = normalizePersonKind($row['person_kind'] ?? 'team_member');
+        $row['limited_project_access'] = (int)($row['limited_project_access'] ?? 0);
         $users[] = $row;
     }
     return $users;
 }
 
-function createUser(string $username, string $password, string $role = 'member', bool $mustChangePassword = true, ?int $orgId = null, string $personKind = 'team_member'): array {
+function createUser(string $username, string $password, string $role = 'member', bool $mustChangePassword = true, ?int $orgId = null, string $personKind = 'team_member', bool $limitedProjectAccess = false): array {
     $db0 = getDbConnection();
     ensureDefaultOrganizationAndUsers($db0);
 
@@ -447,8 +452,8 @@ function createUser(string $username, string $password, string $role = 'member',
 
     $db = getDbConnection();
     $stmt = $db->prepare("
-        INSERT INTO users (username, password_hash, role, is_active, must_change_password, org_id, person_kind)
-        VALUES (:username, :hash, :role, 1, :must_change_password, :org_id, :person_kind)
+        INSERT INTO users (username, password_hash, role, is_active, must_change_password, org_id, person_kind, limited_project_access)
+        VALUES (:username, :hash, :role, 1, :must_change_password, :org_id, :person_kind, :limited_project_access)
     ");
     $stmt->bindValue(':username', normalizeUsername($username), SQLITE3_TEXT);
     $stmt->bindValue(':hash', password_hash($password, PASSWORD_BCRYPT, ['cost' => PASSWORD_COST]), SQLITE3_TEXT);
@@ -456,6 +461,7 @@ function createUser(string $username, string $password, string $role = 'member',
     $stmt->bindValue(':must_change_password', $mustChangePassword ? 1 : 0, SQLITE3_INTEGER);
     $stmt->bindValue(':org_id', $oid, SQLITE3_INTEGER);
     $stmt->bindValue(':person_kind', $pk, SQLITE3_TEXT);
+    $stmt->bindValue(':limited_project_access', $limitedProjectAccess ? 1 : 0, SQLITE3_INTEGER);
 
     try {
         $stmt->execute();
@@ -855,16 +861,12 @@ function validateApiKeyAndGetUser($apiKey): ?array {
     $update->bindValue(':id', (int)$row['api_key_id'], SQLITE3_INTEGER);
     $update->execute();
 
-    return [
-        'id' => (int)$row['user_id'],
-        'username' => $row['username'],
-        'role' => $row['role'],
-        'is_active' => (int)$row['is_active'],
-        'must_change_password' => (int)$row['must_change_password'],
-        'mfa_enabled' => (int)$row['mfa_enabled'],
-        'created_at' => $row['created_at'],
-        'api_key_id' => (int)$row['api_key_id'],
-    ];
+    $full = getUserById((int)$row['user_id'], false);
+    if (!$full || (int)$full['is_active'] !== 1) {
+        return null;
+    }
+    $full['api_key_id'] = (int)$row['api_key_id'];
+    return $full;
 }
 
 function getAllApiKeys(bool $includeRevoked = false): array {
@@ -1142,14 +1144,48 @@ function createTask($title, $status, $createdByUserId, $assignedToUserId = null,
     return ['success' => true, 'id' => $id];
 }
 
-/** C-03: Whether the user is allowed to read/update/delete this task (admin/manager: all; member: creator or assignee). */
-function userCanAccessTask(int $userId, array $task, string $role): bool {
-    if (isAdminRole($role)) {
+function taskUserIsWatcher(int $taskId, int $userId): bool {
+    if ($taskId <= 0 || $userId <= 0) {
+        return false;
+    }
+    $db = getDbConnection();
+    $stmt = $db->prepare('SELECT 1 FROM task_watchers WHERE task_id = :t AND user_id = :u LIMIT 1');
+    $stmt->bindValue(':t', $taskId, SQLITE3_INTEGER);
+    $stmt->bindValue(':u', $userId, SQLITE3_INTEGER);
+    $res = $stmt->execute();
+    return (bool)$res->fetchArray(SQLITE3_ASSOC);
+}
+
+/** Task read/delete side: unrestricted staff sees all tasks; others via linked workspace project, or creator/assignee/watcher when unlinked. */
+function userCanAccessTaskForViewer(array $viewerRow, array $task): bool {
+    if (userHasUnrestrictedOrgDirectoryAccess($viewerRow)) {
         return true;
     }
-    $createdBy = (int)($task['created_by_user_id'] ?? 0);
-    $assignedTo = (int)($task['assigned_to_user_id'] ?? 0);
-    return $createdBy === $userId || $assignedTo === $userId;
+    $uid = (int)$viewerRow['id'];
+    $pid = isset($task['project_id']) ? (int)$task['project_id'] : 0;
+    if ($pid > 0) {
+        $proj = getDirectoryProjectById($pid);
+        if ($proj && userCanAccessDirectoryProject($viewerRow, $proj)) {
+            return true;
+        }
+    }
+    if ((int)($task['created_by_user_id'] ?? 0) === $uid) {
+        return true;
+    }
+    if ((int)($task['assigned_to_user_id'] ?? 0) === $uid) {
+        return true;
+    }
+    return taskUserIsWatcher((int)$task['id'], $uid);
+}
+
+/** C-03: Whether the caller may read/update/delete this task (API + PHP). Loads user row — pass full row to userCanAccessTaskForViewer when available. */
+function userCanAccessTask(int $userId, array $task, string $role): bool {
+    unset($role);
+    $viewer = getUserById($userId, false);
+    if (!$viewer) {
+        return false;
+    }
+    return userCanAccessTaskForViewer($viewer, $task);
 }
 
 function getTaskById($id, bool $includeRelations = true): ?array {
@@ -1204,7 +1240,7 @@ function getTaskById($id, bool $includeRelations = true): ?array {
     return $task;
 }
 
-function listTasks($filters = [], bool $withPagination = false, ?array $apiUser = null) {
+function listTasks($filters = [], bool $withPagination = false, ?array $apiUser = null, ?array $directoryScopeUser = null) {
     $db = getDbConnection();
 
     $where = [];
@@ -1279,9 +1315,25 @@ function listTasks($filters = [], bool $withPagination = false, ?array $apiUser 
         }
     }
 
-    if ($apiUser !== null && !isAdminRole((string)($apiUser['role'] ?? ''))) {
-        $where[] = '(t.created_by_user_id = :access_uid OR t.assigned_to_user_id = :access_uid)';
-        $params[':access_uid'] = [(int)$apiUser['id'], SQLITE3_INTEGER];
+    $scopeUser = $directoryScopeUser ?? null;
+    if ($scopeUser === null && $apiUser !== null) {
+        $scopeUser = $apiUser;
+    }
+    if ($scopeUser !== null && !userHasUnrestrictedOrgDirectoryAccess($scopeUser)) {
+        $rUid = (int)$scopeUser['id'];
+        $accessible = getAccessibleDirectoryProjectIdsForUser($scopeUser);
+        $params[':dir_scope_uid'] = [$rUid, SQLITE3_INTEGER];
+        if ($accessible === []) {
+            $where[] = '(t.project_id IS NULL AND (t.created_by_user_id = :dir_scope_uid OR t.assigned_to_user_id = :dir_scope_uid))';
+        } else {
+            $ph = [];
+            foreach ($accessible as $i => $apid) {
+                $key = ':dir_scope_proj_' . $i;
+                $ph[] = $key;
+                $params[$key] = [(int)$apid, SQLITE3_INTEGER];
+            }
+            $where[] = '((t.project_id IS NULL AND (t.created_by_user_id = :dir_scope_uid OR t.assigned_to_user_id = :dir_scope_uid)) OR (t.project_id IS NOT NULL AND t.project_id IN (' . implode(',', $ph) . ')))';
+        }
     }
 
     $limit = isset($filters['limit']) ? (int)$filters['limit'] : 100;
@@ -1536,6 +1588,158 @@ function listOrganizations(): array {
     return $rows;
 }
 
+function getOrganizationById(int $id): ?array {
+    if ($id <= 0) {
+        return null;
+    }
+    $db = getDbConnection();
+    $stmt = $db->prepare('SELECT id, name, settings_json, created_at FROM organizations WHERE id = :id LIMIT 1');
+    $stmt->bindValue(':id', $id, SQLITE3_INTEGER);
+    $res = $stmt->execute();
+    $row = $res->fetchArray(SQLITE3_ASSOC) ?: null;
+    return $row ?: null;
+}
+
+function createOrganization(string $name, ?int $actorUserId = null): array {
+    $name = truncateString(trim($name), 200);
+    if ($name === '') {
+        return ['success' => false, 'error' => 'Organization name is required'];
+    }
+    $db = getDbConnection();
+    try {
+        $stmt = $db->prepare('INSERT INTO organizations (name) VALUES (:name)');
+        $stmt->bindValue(':name', $name, SQLITE3_TEXT);
+        $stmt->execute();
+        $oid = (int)$db->lastInsertRowID();
+        createAuditLog($actorUserId, 'organization.create', 'organization', (string)$oid, ['name' => $name]);
+        return ['success' => true, 'id' => $oid, 'name' => $name];
+    } catch (Throwable $e) {
+        return ['success' => false, 'error' => 'Could not create organization'];
+    }
+}
+
+function updateOrganizationName(int $orgId, string $name, ?int $actorUserId): array {
+    $name = truncateString(trim($name), 200);
+    if ($orgId <= 0 || $name === '') {
+        return ['success' => false, 'error' => 'Invalid organization or name'];
+    }
+    $db = getDbConnection();
+    $stmt = $db->prepare('UPDATE organizations SET name = :name WHERE id = :id');
+    $stmt->bindValue(':name', $name, SQLITE3_TEXT);
+    $stmt->bindValue(':id', $orgId, SQLITE3_INTEGER);
+    $stmt->execute();
+    if ($db->changes() === 0) {
+        return ['success' => false, 'error' => 'Organization not found'];
+    }
+    createAuditLog($actorUserId, 'organization.update', 'organization', (string)$orgId, ['name' => $name]);
+    return ['success' => true];
+}
+
+/** Remove memberships on projects outside the given organization (runs before org reassignment). */
+function removeUserProjectMembershipsOutsideOrganization(int $userId, int $orgId): void {
+    if ($userId <= 0 || $orgId <= 0) {
+        return;
+    }
+    $db = getDbConnection();
+    $stmt = $db->prepare('
+        DELETE FROM project_members
+        WHERE user_id = :u
+          AND project_id IN (SELECT id FROM projects WHERE org_id != :org)
+    ');
+    $stmt->bindValue(':u', $userId, SQLITE3_INTEGER);
+    $stmt->bindValue(':org', $orgId, SQLITE3_INTEGER);
+    $stmt->execute();
+}
+
+function setUserOrganization(int $actorUserId, int $targetUserId, int $newOrgId): array {
+    if ($targetUserId <= 0 || $newOrgId <= 0) {
+        return ['success' => false, 'error' => 'Invalid user or organization'];
+    }
+    if (!getOrganizationById($newOrgId)) {
+        return ['success' => false, 'error' => 'Organization not found'];
+    }
+    $tgt = getUserById($targetUserId, false);
+    if (!$tgt) {
+        return ['success' => false, 'error' => 'User not found'];
+    }
+    removeUserProjectMembershipsOutsideOrganization($targetUserId, $newOrgId);
+    $db = getDbConnection();
+    $stmt = $db->prepare('UPDATE users SET org_id = :oid WHERE id = :id');
+    $stmt->bindValue(':oid', $newOrgId, SQLITE3_INTEGER);
+    $stmt->bindValue(':id', $targetUserId, SQLITE3_INTEGER);
+    $stmt->execute();
+    createAuditLog($actorUserId, 'user.organization_set', 'user', (string)$targetUserId, ['org_id' => $newOrgId]);
+    return ['success' => true];
+}
+
+function setUserLimitedProjectAccess(int $actorUserId, int $targetUserId, bool $limited): array {
+    if ($targetUserId <= 0) {
+        return ['success' => false, 'error' => 'Invalid user'];
+    }
+    $tgt = getUserById($targetUserId, false);
+    if (!$tgt) {
+        return ['success' => false, 'error' => 'User not found'];
+    }
+    $db = getDbConnection();
+    $stmt = $db->prepare('UPDATE users SET limited_project_access = :l WHERE id = :id');
+    $stmt->bindValue(':l', $limited ? 1 : 0, SQLITE3_INTEGER);
+    $stmt->bindValue(':id', $targetUserId, SQLITE3_INTEGER);
+    $stmt->execute();
+    createAuditLog($actorUserId, 'user.limited_project_access_set', 'user', (string)$targetUserId, ['limited' => $limited ? 1 : 0]);
+    return ['success' => true];
+}
+
+/** All directory projects in an organization (non-trashed), sorted by name. For admin UX / membership bulk edit. */
+function listAllDirectoryProjectsInOrganization(int $orgId, int $limit = 500): array {
+    if ($orgId <= 0) {
+        return [];
+    }
+    $limit = max(1, min(500, $limit));
+    $db = getDbConnection();
+    $stmt = $db->prepare('
+        SELECT id, org_id, name, description, status, client_visible, all_access, created_at, updated_at
+        FROM projects
+        WHERE org_id = :org AND status != \'trashed\'
+        ORDER BY name COLLATE NOCASE ASC
+        LIMIT :lim
+    ');
+    $stmt->bindValue(':org', $orgId, SQLITE3_INTEGER);
+    $stmt->bindValue(':lim', $limit, SQLITE3_INTEGER);
+    $res = $stmt->execute();
+    $items = [];
+    while ($row = $res->fetchArray(SQLITE3_ASSOC)) {
+        $row['id'] = (int)$row['id'];
+        $row['org_id'] = (int)$row['org_id'];
+        $row['client_visible'] = (int)$row['client_visible'];
+        $row['all_access'] = (int)$row['all_access'];
+        $items[] = $row;
+    }
+    return $items;
+}
+
+function listOrganizationsWithStats(): array {
+    $orgs = listOrganizations();
+    if (!$orgs) {
+        return [];
+    }
+    $db = getDbConnection();
+    foreach ($orgs as &$o) {
+        $oid = (int)$o['id'];
+        $st = $db->prepare('SELECT COUNT(*) FROM users WHERE org_id = :o');
+        $st->bindValue(':o', $oid, SQLITE3_INTEGER);
+        $res = $st->execute();
+        $row = $res->fetchArray(SQLITE3_NUM);
+        $o['user_count'] = $row ? (int)$row[0] : 0;
+        $st2 = $db->prepare('SELECT COUNT(*) FROM projects WHERE org_id = :o AND status != \'trashed\'');
+        $st2->bindValue(':o', $oid, SQLITE3_INTEGER);
+        $res2 = $st2->execute();
+        $row2 = $res2->fetchArray(SQLITE3_NUM);
+        $o['project_count'] = $row2 ? (int)$row2[0] : 0;
+    }
+    unset($o);
+    return $orgs;
+}
+
 /** Valid directory project lifecycle status values. */
 function normalizeDirectoryProjectStatus(?string $status): ?string {
     $s = strtolower(trim((string)$status));
@@ -1571,6 +1775,33 @@ function getProjectMemberRole(int $userId, int $projectId): ?string {
 }
 
 /**
+ * When true: user sees all non-trashed projects in their organization (respecting client_visibility for clients never applies — clients always restricted).
+ */
+function userHasUnrestrictedOrgDirectoryAccess(array $userRow): bool {
+    if (normalizePersonKind($userRow['person_kind'] ?? 'team_member') === 'client') {
+        return false;
+    }
+    $role = (string)($userRow['role'] ?? 'member');
+    if ($role === 'admin') {
+        return true;
+    }
+    if ($role === 'manager' && empty((int)($userRow['limited_project_access'] ?? 0))) {
+        return true;
+    }
+    return false;
+}
+
+/** Project IDs the user may open (respects memberships, all_access, client visibility). */
+function getAccessibleDirectoryProjectIdsForUser(array $userRow): array {
+    $rows = listDirectoryProjectsForUser($userRow, 500);
+    $ids = [];
+    foreach ($rows as $r) {
+        $ids[] = (int)$r['id'];
+    }
+    return $ids;
+}
+
+/**
  * Whether the user may see this project row in the directory (non-trashed; org match; client_visible for clients; membership or staff).
  */
 function userCanAccessDirectoryProject(array $userRow, ?array $project): bool {
@@ -1588,8 +1819,7 @@ function userCanAccessDirectoryProject(array $userRow, ?array $project): bool {
     if ($pk === 'client' && empty((int)($project['client_visible'] ?? 0))) {
         return false;
     }
-    $role = (string)($userRow['role'] ?? 'member');
-    if (in_array($role, ['admin', 'manager'], true) && $pk !== 'client') {
+    if (userHasUnrestrictedOrgDirectoryAccess($userRow)) {
         return true;
     }
     if (!empty((int)($project['all_access'] ?? 0))) {
@@ -1605,7 +1835,7 @@ function userCanAccessDirectoryProject(array $userRow, ?array $project): bool {
     return (bool)$res->fetchArray(SQLITE3_ASSOC);
 }
 
-/** Team users who are project lead or org admin/manager may change project settings and membership. */
+/** Team lead, org admin, or unrestricted manager may change project settings and membership (limited managers: lead-only). */
 function userCanManageDirectoryProject(array $userRow, array $project): bool {
     if (!userCanAccessDirectoryProject($userRow, $project)) {
         return false;
@@ -1614,7 +1844,10 @@ function userCanManageDirectoryProject(array $userRow, array $project): bool {
         return false;
     }
     $role = (string)($userRow['role'] ?? 'member');
-    if (in_array($role, ['admin', 'manager'], true)) {
+    if ($role === 'admin') {
+        return true;
+    }
+    if ($role === 'manager' && userHasUnrestrictedOrgDirectoryAccess($userRow)) {
         return true;
     }
     return getProjectMemberRole((int)$userRow['id'], (int)$project['id']) === 'lead';
@@ -1650,7 +1883,6 @@ function listDirectoryProjectsForUser(array $userRow, int $limit = 200): array {
     $limit = max(1, min(500, $limit));
     $uid = (int)$userRow['id'];
     $orgId = isset($userRow['org_id']) ? (int)$userRow['org_id'] : 0;
-    $role = (string)($userRow['role'] ?? 'member');
     $pk = normalizePersonKind($userRow['person_kind'] ?? 'team_member');
     $clientOnly = ($pk === 'client');
     if ($orgId <= 0) {
@@ -1659,7 +1891,7 @@ function listDirectoryProjectsForUser(array $userRow, int $limit = 200): array {
     $db = getDbConnection();
     $cvClause = $clientOnly ? ' AND client_visible = 1' : '';
     $cvClauseP = $clientOnly ? ' AND p.client_visible = 1' : '';
-    $canSeeAll = in_array($role, ['admin', 'manager'], true) && !$clientOnly;
+    $canSeeAll = userHasUnrestrictedOrgDirectoryAccess($userRow);
     if ($canSeeAll) {
         $stmt = $db->prepare("
             SELECT id, org_id, name, description, status, client_visible, all_access, created_at, updated_at

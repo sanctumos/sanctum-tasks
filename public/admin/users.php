@@ -24,7 +24,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $role = (string)($_POST['role'] ?? 'member');
         $mustChange = isset($_POST['must_change_password']) ? (bool)$_POST['must_change_password'] : true;
         $personKind = normalizePersonKind((string)($_POST['person_kind'] ?? 'team_member'));
-        $result = createUser($username, $password, $role, $mustChange, null, $personKind);
+        $orgIdCreate = isset($_POST['org_id']) ? (int)$_POST['org_id'] : 0;
+        $orgIdCreate = $orgIdCreate > 0 ? $orgIdCreate : null;
+        $limitedCreate = isset($_POST['limited_project_access']);
+        $result = createUser($username, $password, $role, $mustChange, $orgIdCreate, $personKind, $limitedCreate);
         if ($result['success']) {
             $message = 'User created successfully';
             $messageType = 'success';
@@ -65,10 +68,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $message = $result['error'] ?? 'Failed to reset password';
             $messageType = 'danger';
         }
+    } elseif ($action === 'update_workspace') {
+        $userId = (int)($_POST['id'] ?? 0);
+        $orgId = (int)($_POST['org_id'] ?? 0);
+        if ($userId <= 0 || $orgId <= 0) {
+            $message = 'Invalid user or organization';
+            $messageType = 'danger';
+        } else {
+            $resOrg = setUserOrganization((int)$currentUser['id'], $userId, $orgId);
+            if (!$resOrg['success']) {
+                $message = $resOrg['error'] ?? 'Failed to set organization';
+                $messageType = 'danger';
+            } else {
+                $tgt = getUserById($userId, false);
+                $wantLimited = isset($_POST['limited_project_access']) && $tgt && (string)($tgt['role'] ?? '') !== 'admin';
+                setUserLimitedProjectAccess((int)$currentUser['id'], $userId, $wantLimited);
+                $message = 'Workspace access updated.';
+            }
+        }
     }
 }
 
 $users = listUsers(true);
+$orgDirectory = listOrganizations();
 
 $pageTitle = 'Users';
 require __DIR__ . '/_layout_top.php';
@@ -82,6 +104,7 @@ require __DIR__ . '/_layout_top.php';
         <div class="subtitle"><?= count($users) ?> in this workspace</div>
     </div>
     <div class="page-header__actions">
+        <a class="btn btn-sm btn-outline-secondary" href="/admin/organizations.php"><i class="bi bi-building me-1"></i>Organizations</a>
         <a class="btn btn-sm btn-outline-secondary" href="/admin/settings.php?tab=audit"><i class="bi bi-shield-check me-1"></i>Audit log</a>
         <button class="btn btn-sm btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#newUserModal"><i class="bi bi-person-plus me-1"></i>New user</button>
     </div>
@@ -98,13 +121,15 @@ require __DIR__ . '/_layout_top.php';
         <thead>
             <tr>
                 <th>Username</th>
-                <th style="width: 100px;">Role</th>
-                <th style="width: 130px;">Person kind</th>
-                <th style="width: 80px;">Active</th>
-                <th style="width: 90px;">MFA</th>
-                <th style="width: 130px;">Must change</th>
-                <th style="width: 130px;">Created</th>
-                <th style="width: 200px; text-align: right;">Actions</th>
+                <th style="min-width: 148px;">Organization</th>
+                <th style="min-width: 140px;">Project scope</th>
+                <th style="width: 96px;">Role</th>
+                <th style="width: 110px;">Person kind</th>
+                <th style="width: 72px;">Active</th>
+                <th style="width: 80px;">MFA</th>
+                <th style="width: 96px;">Must change</th>
+                <th style="width: 120px;">Created</th>
+                <th style="min-width: 260px; text-align: right;">Actions</th>
             </tr>
         </thead>
         <tbody>
@@ -112,7 +137,44 @@ require __DIR__ . '/_layout_top.php';
                 <tr>
                     <td>
                         <strong><?= htmlspecialchars($u['username']) ?></strong>
-                        <div class="text-muted small">#<?= (int)$u['id'] ?> · org <?= isset($u['org_id']) && $u['org_id'] !== null ? (int)$u['org_id'] : '—' ?></div>
+                        <div class="text-muted small">User #<?= (int)$u['id'] ?></div>
+                    </td>
+                    <td class="small">
+                        <?php if ($orgDirectory !== []): ?>
+                            <form method="post" action="/admin/users.php" class="d-flex flex-column gap-1 align-items-start">
+                                <?= csrfInputField() ?>
+                                <input type="hidden" name="action" value="update_workspace">
+                                <input type="hidden" name="id" value="<?= (int)$u['id'] ?>">
+                                <select class="form-select form-select-sm" name="org_id" aria-label="Organization for <?= htmlspecialchars($u['username']) ?>">
+                                    <?php foreach ($orgDirectory as $o): ?>
+                                        <option value="<?= (int)$o['id'] ?>" <?= isset($u['org_id']) && (int)$u['org_id'] === (int)$o['id'] ? 'selected' : '' ?>><?= htmlspecialchars($o['name']) ?> (#<?= (int)$o['id'] ?>)</option>
+                                    <?php endforeach; ?>
+                                </select>
+                                <?php if ((string)($u['role'] ?? '') !== 'admin'): ?>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" name="limited_project_access" value="1" id="lim_<?= (int)$u['id'] ?>" <?= !empty((int)($u['limited_project_access'] ?? 0)) ? 'checked' : '' ?>>
+                                        <label class="form-check-label small" for="lim_<?= (int)$u['id'] ?>">Limit projects</label>
+                                    </div>
+                                <?php else: ?>
+                                    <span class="text-muted small">Admin sees all org projects</span>
+                                <?php endif; ?>
+                                <button type="submit" class="btn btn-sm btn-outline-primary">Save</button>
+                            </form>
+                        <?php else: ?>
+                            <span class="text-muted">No orgs</span>
+                        <?php endif; ?>
+                    </td>
+                    <td class="small">
+                        <?php if ((string)($u['role'] ?? '') === 'admin'): ?>
+                            <span class="status-pill status-pill--done">All projects</span>
+                        <?php elseif (!empty((int)($u['limited_project_access'] ?? 0))): ?>
+                            <span class="status-pill status-pill--doing">Assigned only</span>
+                        <?php elseif (in_array((string)($u['role'] ?? ''), ['manager'], true)): ?>
+                            <span class="status-pill status-pill--todo">Org-wide</span>
+                        <?php else: ?>
+                            <span class="status-pill status-pill--doing">Member routing</span>
+                        <?php endif; ?>
+                        <div class="mt-1"><a class="small" href="/admin/user-projects.php?id=<?= (int)$u['id'] ?>"><i class="bi bi-kanban me-1"></i>Edit projects</a></div>
                     </td>
                     <td><span class="tag-chip"><?= htmlspecialchars($u['role']) ?></span></td>
                     <td class="small"><?= htmlspecialchars($u['person_kind'] ?? 'team_member') ?></td>
@@ -186,6 +248,20 @@ require __DIR__ . '/_layout_top.php';
                                 <option value="client">client</option>
                             </select>
                         </div>
+                    </div>
+                    <?php if ($orgDirectory !== []): ?>
+                        <div class="mb-3">
+                            <label class="form-label">Organization</label>
+                            <select class="form-select" name="org_id" required>
+                                <?php foreach ($orgDirectory as $o): ?>
+                                    <option value="<?= (int)$o['id'] ?>"><?= htmlspecialchars($o['name']) ?> (#<?= (int)$o['id'] ?>)</option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                    <?php endif; ?>
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="checkbox" id="limitedNew" name="limited_project_access" value="1">
+                        <label class="form-check-label" for="limitedNew">Limit to assigned projects (applies managers &amp; members)</label>
                     </div>
                     <div class="form-check mt-3">
                         <input class="form-check-input" type="checkbox" id="mustChangePassword" name="must_change_password" value="1" checked>

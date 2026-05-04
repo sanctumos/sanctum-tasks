@@ -164,7 +164,7 @@ First-class **organizations** and **projects** (Basecamp-shaped directory). User
 ## Users (admin)
 
 - `GET /api/list-users.php`
-- `POST /api/create-user.php` — optional `org_id`, optional `person_kind` (`team_member` \| `client`); defaults to first organization and `team_member` when omitted.
+- `POST /api/create-user.php` — optional `org_id`, optional `person_kind` (`team_member` \| `client`), optional `limited_project_access` (boolean; when true, managers/members follow project membership + `all_access` for directory and task lists); defaults to first organization and `team_member` when omitted.
 - `POST /api/disable-user.php` (`is_active` controls enable/disable)
 - `POST /api/reset-user-password.php`
 

@@ -8,12 +8,12 @@ def get_user_by_id(user_id: int, include_sensitive: bool = False) -> dict | None
     conn = db.get_connection()
     if include_sensitive:
         cur = conn.execute(
-            "SELECT id, username, role, is_active, must_change_password, mfa_enabled, mfa_secret, password_hash, org_id, person_kind, created_at FROM users WHERE id = ? LIMIT 1",
+            "SELECT id, username, role, is_active, must_change_password, mfa_enabled, mfa_secret, password_hash, org_id, person_kind, limited_project_access, created_at FROM users WHERE id = ? LIMIT 1",
             (int(user_id),),
         )
     else:
         cur = conn.execute(
-            "SELECT id, username, role, is_active, must_change_password, mfa_enabled, org_id, person_kind, created_at FROM users WHERE id = ? LIMIT 1",
+            "SELECT id, username, role, is_active, must_change_password, mfa_enabled, org_id, person_kind, limited_project_access, created_at FROM users WHERE id = ? LIMIT 1",
             (int(user_id),),
         )
     row = cur.fetchone()
@@ -27,6 +27,7 @@ def get_user_by_id(user_id: int, include_sensitive: bool = False) -> dict | None
     if r.get("org_id") is not None:
         r["org_id"] = int(r["org_id"])
     r["person_kind"] = normalize_person_kind(r.get("person_kind"))
+    r["limited_project_access"] = int(r.get("limited_project_access") or 0)
     return r
 
 
@@ -38,12 +39,12 @@ def get_user_by_username(username: str, include_sensitive: bool = False) -> dict
     conn = db.get_connection()
     if include_sensitive:
         cur = conn.execute(
-            "SELECT id, username, role, is_active, must_change_password, mfa_enabled, mfa_secret, password_hash, org_id, person_kind, created_at FROM users WHERE username = ? LIMIT 1",
+            "SELECT id, username, role, is_active, must_change_password, mfa_enabled, mfa_secret, password_hash, org_id, person_kind, limited_project_access, created_at FROM users WHERE username = ? LIMIT 1",
             (u,),
         )
     else:
         cur = conn.execute(
-            "SELECT id, username, role, is_active, must_change_password, mfa_enabled, org_id, person_kind, created_at FROM users WHERE username = ? LIMIT 1",
+            "SELECT id, username, role, is_active, must_change_password, mfa_enabled, org_id, person_kind, limited_project_access, created_at FROM users WHERE username = ? LIMIT 1",
             (u,),
         )
     row = cur.fetchone()
@@ -57,4 +58,5 @@ def get_user_by_username(username: str, include_sensitive: bool = False) -> dict
     if r.get("org_id") is not None:
         r["org_id"] = int(r["org_id"])
     r["person_kind"] = normalize_person_kind(r.get("person_kind"))
+    r["limited_project_access"] = int(r.get("limited_project_access") or 0)
     return r

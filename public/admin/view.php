@@ -17,6 +17,12 @@ if (!$task) {
     exit();
 }
 
+$currentUser = getCurrentUser();
+if (!$currentUser || !userCanAccessTaskForViewer($currentUser, $task)) {
+    header('Location: /admin/');
+    exit();
+}
+
 $statuses = listTaskStatuses();
 $statusMap = [];
 foreach ($statuses as $s) { $statusMap[$s['slug']] = $s; }

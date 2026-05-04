@@ -20,8 +20,9 @@ $createApiKey = isset($body['create_api_key']) && (bool)$body['create_api_key'];
 $apiKeyName = (string)($body['api_key_name'] ?? 'default');
 $orgId = isset($body['org_id']) ? (int)$body['org_id'] : null;
 $personKind = (string)($body['person_kind'] ?? 'team_member');
+$limitedProjectAccess = isset($body['limited_project_access']) && (bool)$body['limited_project_access'];
 
-$createResult = createUser($username, $password, $role, $mustChangePassword, $orgId, $personKind);
+$createResult = createUser($username, $password, $role, $mustChangePassword, $orgId, $personKind, $limitedProjectAccess);
 if (!$createResult['success']) {
     apiError('user.create_failed', $createResult['error'] ?? 'Create user failed', 400);
 }

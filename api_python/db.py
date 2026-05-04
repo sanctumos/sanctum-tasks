@@ -77,6 +77,7 @@ def _apply_workspace_schema(conn: sqlite3.Connection) -> None:
     if _table_exists(conn, "users"):
         _ensure_column_exists(conn, "users", "org_id", "INTEGER DEFAULT NULL")
         _ensure_column_exists(conn, "users", "person_kind", "TEXT NOT NULL DEFAULT 'team_member'")
+        _ensure_column_exists(conn, "users", "limited_project_access", "INTEGER NOT NULL DEFAULT 0")
     conn.executescript("""
         CREATE TABLE IF NOT EXISTS projects (
             id INTEGER PRIMARY KEY AUTOINCREMENT,

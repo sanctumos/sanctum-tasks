@@ -28,6 +28,7 @@ $pageTitle = isset($pageTitle) ? $pageTitle : 'Sanctum Tasks';
                     <a class="btn btn-outline-light text-center text-lg-start" href="/admin/"><i class="bi bi-list-check me-1"></i>Tasks</a>
                     <a class="btn btn-outline-light text-center text-lg-start" href="/admin/workspace-projects.php"><i class="bi bi-kanban me-1"></i>Projects</a>
                     <?php if (isAdminRole((string)($_SESSION['role'] ?? ''))): ?>
+                        <a class="btn btn-outline-light text-center text-lg-start" href="/admin/organizations.php"><i class="bi bi-building me-1"></i>Organizations</a>
                         <a class="btn btn-outline-light text-center text-lg-start" href="/admin/users.php"><i class="bi bi-people me-1"></i>Users</a>
                     <?php endif; ?>
                     <a class="btn btn-outline-light text-center text-lg-start" href="/admin/settings.php"><i class="bi bi-gear me-1"></i>Settings</a>

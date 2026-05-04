@@ -43,7 +43,7 @@ $filters = [
 if ($projectIdFilter > 0) {
     $filters['project_id'] = $projectIdFilter;
 }
-$tasksResult = listTasks($filters, true);
+$tasksResult = listTasks($filters, true, null, $currentUser);
 $tasks = $tasksResult['tasks'];
 $total = (int)$tasksResult['total'];
 

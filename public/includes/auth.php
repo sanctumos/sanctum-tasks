@@ -54,6 +54,7 @@ function requireAuth(): void {
         $script = $_SERVER['SCRIPT_NAME'] ?? '';
         $allowed = [
             '/admin/change-password.php',
+            '/admin/settings.php',
             '/admin/logout.php',
         ];
         if (!in_array($script, $allowed, true)) {

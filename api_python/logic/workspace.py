@@ -13,6 +13,18 @@ def _now_utc() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
 
 
+def user_has_unrestricted_org_directory_access(user_row: dict) -> bool:
+    """Mirrors PHP userHasUnrestrictedOrgDirectoryAccess: admins always; managers unless limited_project_access."""
+    if normalize_person_kind(str(user_row.get("person_kind"))) == "client":
+        return False
+    role = str(user_row.get("role") or "member")
+    if role == "admin":
+        return True
+    if role == "manager" and not int(user_row.get("limited_project_access") or 0):
+        return True
+    return False
+
+
 def list_organizations(*, user_role: str, org_id: int | None) -> list[dict]:
     db.init_schema()
     conn = db.get_connection()
@@ -36,7 +48,6 @@ def list_directory_projects_for_user(user_row: dict, limit: int = 200) -> list[d
     limit = max(1, min(500, limit))
     uid = int(user_row["id"])
     org_id = int(user_row.get("org_id") or 0)
-    role = str(user_row.get("role") or "member")
     client_only = normalize_person_kind(str(user_row.get("person_kind"))) == "client"
     if org_id <= 0:
         return []
@@ -44,7 +55,7 @@ def list_directory_projects_for_user(user_row: dict, limit: int = 200) -> list[d
     cvp = " AND p.client_visible = 1" if client_only else ""
     conn = db.get_connection()
     try:
-        if role in ("admin", "manager") and not client_only:
+        if user_has_unrestricted_org_directory_access(user_row) and not client_only:
             cur = conn.execute(
                 f"""
                 SELECT id, org_id, name, description, status, client_visible, all_access, created_at, updated_at
@@ -211,8 +222,7 @@ def user_can_access_directory_project(user_row: dict, project: dict | None) -> b
         return False
     if normalize_person_kind(str(user_row.get("person_kind"))) == "client" and not int(project.get("client_visible") or 0):
         return False
-    role = str(user_row.get("role") or "member")
-    if role in ("admin", "manager") and normalize_person_kind(str(user_row.get("person_kind"))) != "client":
+    if user_has_unrestricted_org_directory_access(user_row):
         return True
     if int(project.get("all_access") or 0):
         return True
@@ -235,7 +245,9 @@ def user_can_manage_directory_project(user_row: dict, project: dict) -> bool:
     if normalize_person_kind(str(user_row.get("person_kind"))) == "client":
         return False
     role = str(user_row.get("role") or "member")
-    if role in ("admin", "manager"):
+    if role == "admin":
+        return True
+    if role == "manager" and user_has_unrestricted_org_directory_access(user_row):
         return True
     return get_project_member_role(int(user_row["id"]), int(project["id"])) == "lead"
 

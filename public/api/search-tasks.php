@@ -37,7 +37,7 @@ $filters = [
     'offset' => $offset,
 ];
 
-$result = listTasks($filters, true);
+$result = listTasks($filters, true, $apiUser);
 $baseQueryParams = [];
 foreach (['q', 'status', 'priority', 'assigned_to_user_id', 'sort_by', 'sort_dir'] as $k) {
     if (isset($_GET[$k]) && trim((string)$_GET[$k]) !== '') {
