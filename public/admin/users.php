@@ -73,9 +73,9 @@ $auditLogs = listAuditLogs(50, 0);
 require __DIR__ . '/_layout_top.php';
 ?>
 
-<div class="d-flex align-items-center justify-content-between mb-3">
+<div class="d-flex flex-column flex-sm-row align-items-stretch align-items-sm-center justify-content-between gap-2 mb-4">
     <h1 class="h3 mb-0">Users</h1>
-    <a class="btn btn-sm btn-outline-secondary" href="/admin/">Back to Tasks</a>
+    <a class="btn btn-outline-secondary" href="/admin/">Back to Tasks</a>
 </div>
 
 <?php if ($message): ?>
@@ -88,16 +88,16 @@ require __DIR__ . '/_layout_top.php';
         <form method="post" action="/admin/users.php">
             <?= csrfInputField() ?>
             <input type="hidden" name="action" value="create">
-            <div class="row g-2">
-                <div class="col-md-3">
+            <div class="row g-3">
+                <div class="col-12 col-sm-6 col-md-3">
                     <label class="form-label">Username</label>
                     <input class="form-control" name="username" required>
                 </div>
-                <div class="col-md-3">
+                <div class="col-12 col-sm-6 col-md-3">
                     <label class="form-label">Temporary Password</label>
                     <input class="form-control" type="password" name="password" required>
                 </div>
-                <div class="col-md-2">
+                <div class="col-12 col-sm-6 col-md-2">
                     <label class="form-label">Role</label>
                     <select class="form-select" name="role">
                         <?php foreach (['member', 'manager', 'admin', 'api'] as $role): ?>
@@ -105,14 +105,14 @@ require __DIR__ . '/_layout_top.php';
                         <?php endforeach; ?>
                     </select>
                 </div>
-                <div class="col-md-2">
+                <div class="col-12 col-sm-6 col-md-2">
                     <label class="form-label">Person kind</label>
                     <select class="form-select" name="person_kind" title="Team member vs client (Basecamp-style)">
                         <option value="team_member" selected>team_member</option>
                         <option value="client">client</option>
                     </select>
                 </div>
-                <div class="col-md-2 d-flex align-items-end">
+                <div class="col-12 col-sm-6 col-md-2 d-flex align-items-end">
                     <button class="btn btn-primary w-100" type="submit">Create</button>
                 </div>
             </div>
@@ -155,23 +155,25 @@ require __DIR__ . '/_layout_top.php';
                         <td><?= (int)$u['mfa_enabled'] === 1 ? 'Enabled' : 'Disabled' ?></td>
                         <td><?= (int)$u['must_change_password'] === 1 ? 'Yes' : 'No' ?></td>
                         <td class="small text-muted"><?= htmlspecialchars($u['created_at']) ?></td>
-                        <td class="text-end">
-                            <form method="post" action="/admin/users.php" class="d-inline">
-                                <?= csrfInputField() ?>
-                                <input type="hidden" name="action" value="toggle_active">
-                                <input type="hidden" name="id" value="<?= (int)$u['id'] ?>">
-                                <input type="hidden" name="is_active" value="<?= (int)$u['is_active'] === 1 ? '0' : '1' ?>">
-                                <button class="btn btn-sm btn-outline-<?= (int)$u['is_active'] === 1 ? 'warning' : 'success' ?>" type="submit">
-                                    <?= (int)$u['is_active'] === 1 ? 'Disable' : 'Enable' ?>
-                                </button>
-                            </form>
-                            <form method="post" action="/admin/users.php" class="d-inline">
-                                <?= csrfInputField() ?>
-                                <input type="hidden" name="action" value="reset_password">
-                                <input type="hidden" name="id" value="<?= (int)$u['id'] ?>">
-                                <input type="hidden" name="new_password" value="">
-                                <button class="btn btn-sm btn-outline-danger" type="submit">Reset Password</button>
-                            </form>
+                        <td class="text-start text-md-end">
+                            <div class="d-grid gap-2 d-md-flex flex-md-wrap justify-content-md-end">
+                                <form method="post" action="/admin/users.php" class="m-0 d-grid">
+                                    <?= csrfInputField() ?>
+                                    <input type="hidden" name="action" value="toggle_active">
+                                    <input type="hidden" name="id" value="<?= (int)$u['id'] ?>">
+                                    <input type="hidden" name="is_active" value="<?= (int)$u['is_active'] === 1 ? '0' : '1' ?>">
+                                    <button class="btn btn-sm btn-outline-<?= (int)$u['is_active'] === 1 ? 'warning' : 'success' ?>" type="submit">
+                                        <?= (int)$u['is_active'] === 1 ? 'Disable' : 'Enable' ?>
+                                    </button>
+                                </form>
+                                <form method="post" action="/admin/users.php" class="m-0 d-grid">
+                                    <?= csrfInputField() ?>
+                                    <input type="hidden" name="action" value="reset_password">
+                                    <input type="hidden" name="id" value="<?= (int)$u['id'] ?>">
+                                    <input type="hidden" name="new_password" value="">
+                                    <button class="btn btn-sm btn-outline-danger" type="submit">Reset password</button>
+                                </form>
+                            </div>
                         </td>
                     </tr>
                 <?php endforeach; ?>

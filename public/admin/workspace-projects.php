@@ -41,9 +41,9 @@ $projects = listDirectoryProjectsForUser($currentUser, 300);
 require __DIR__ . '/_layout_top.php';
 ?>
 
-<div class="d-flex align-items-center justify-content-between mb-3">
+<div class="d-flex flex-column flex-sm-row align-items-stretch align-items-sm-center justify-content-between gap-2 mb-4">
     <h1 class="h3 mb-0">Workspace projects</h1>
-    <a class="btn btn-sm btn-outline-secondary" href="/admin/">Back to Tasks</a>
+    <a class="btn btn-outline-secondary" href="/admin/">Back to Tasks</a>
 </div>
 
 <p class="text-muted small">
@@ -61,16 +61,16 @@ require __DIR__ . '/_layout_top.php';
         <form method="post" action="/admin/workspace-projects.php">
             <?= csrfInputField() ?>
             <input type="hidden" name="action" value="create">
-            <div class="row g-2 align-items-end">
-                <div class="col-md-4">
+            <div class="row g-3 align-items-end">
+                <div class="col-12 col-md-4">
                     <label class="form-label">Name</label>
                     <input class="form-control" name="name" required maxlength="200" placeholder="e.g. Website redesign">
                 </div>
-                <div class="col-md-5">
+                <div class="col-12 col-md-5">
                     <label class="form-label">Description (optional)</label>
                     <input class="form-control" name="description" placeholder="Short summary">
                 </div>
-                <div class="col-md-3">
+                <div class="col-12 col-md-3">
                     <div class="form-check">
                         <input class="form-check-input" type="checkbox" name="client_visible" id="cv" value="1">
                         <label class="form-check-label" for="cv">Client-visible flag</label>

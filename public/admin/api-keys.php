@@ -37,9 +37,9 @@ $apiKeys = getAllApiKeys();
 require __DIR__ . '/_layout_top.php';
 ?>
 
-<div class="d-flex align-items-center justify-content-between mb-3">
+<div class="d-flex flex-column flex-sm-row align-items-stretch align-items-sm-center justify-content-between gap-2 mb-4">
     <h1 class="h3 mb-0">API Keys</h1>
-    <a class="btn btn-sm btn-outline-secondary" href="/admin/">Back to Tasks</a>
+    <a class="btn btn-outline-secondary" href="/admin/">Back to Tasks</a>
 </div>
 
 <?php if (isset($message)): ?>

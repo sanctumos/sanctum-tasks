@@ -38,9 +38,9 @@ $flashSuccess = $_SESSION['admin_flash_success'] ?? null;
 if (isset($_SESSION['admin_flash_error'])) unset($_SESSION['admin_flash_error']);
 if (isset($_SESSION['admin_flash_success'])) unset($_SESSION['admin_flash_success']);
 ?>
-<div class="d-flex align-items-center justify-content-between mb-3">
+<div class="d-flex flex-column flex-sm-row align-items-stretch align-items-sm-center justify-content-between gap-2 mb-4">
     <h1 class="h3 mb-0">Tasks</h1>
-    <a class="btn btn-sm btn-outline-secondary" href="/">Home</a>
+    <a class="btn btn-outline-secondary" href="/">Home</a>
 </div>
 <?php if ($flashError): ?>
 <div class="alert alert-danger alert-dismissible fade show" role="alert"><?= htmlspecialchars($flashError) ?>
@@ -55,8 +55,8 @@ if (isset($_SESSION['admin_flash_success'])) unset($_SESSION['admin_flash_succes
 
 <div class="card shadow-sm mb-4">
     <div class="card-body">
-        <form class="row g-2" method="get" action="/admin/">
-            <div class="col-md-3">
+        <form class="row g-3" method="get" action="/admin/">
+            <div class="col-12 col-sm-6 col-lg-3">
                 <label class="form-label">Status</label>
                 <select class="form-select" name="status">
                     <option value="" <?= $status === '' ? 'selected' : '' ?>>All</option>
@@ -67,7 +67,7 @@ if (isset($_SESSION['admin_flash_success'])) unset($_SESSION['admin_flash_succes
                     <?php endforeach; ?>
                 </select>
             </div>
-            <div class="col-md-4">
+            <div class="col-12 col-sm-6 col-lg-4">
                 <label class="form-label">Assigned to</label>
                 <select class="form-select" name="assigned_to_user_id">
                     <option value="">Anyone</option>
@@ -78,7 +78,7 @@ if (isset($_SESSION['admin_flash_success'])) unset($_SESSION['admin_flash_succes
                     <?php endforeach; ?>
                 </select>
             </div>
-            <div class="col-md-2">
+            <div class="col-12 col-sm-6 col-lg-2">
                 <label class="form-label">Priority</label>
                 <select class="form-select" name="priority">
                     <option value="" <?= $priority === '' ? 'selected' : '' ?>>Any</option>
@@ -87,7 +87,7 @@ if (isset($_SESSION['admin_flash_success'])) unset($_SESSION['admin_flash_succes
                     <?php endforeach; ?>
                 </select>
             </div>
-            <div class="col-md-3">
+            <div class="col-12 col-sm-6 col-lg-3">
                 <label class="form-label">Project</label>
                 <input class="form-control" name="project" value="<?= htmlspecialchars($project) ?>" list="projects-list" placeholder="Project name">
                 <datalist id="projects-list">
@@ -96,11 +96,11 @@ if (isset($_SESSION['admin_flash_success'])) unset($_SESSION['admin_flash_succes
                     <?php endforeach; ?>
                 </datalist>
             </div>
-            <div class="col-md-4">
+            <div class="col-12 col-md-6 col-xl-4">
                 <label class="form-label">Search</label>
                 <input class="form-control" name="q" value="<?= htmlspecialchars($q) ?>" placeholder="Title or body...">
             </div>
-            <div class="col-md-2">
+            <div class="col-6 col-sm-4 col-md-3 col-xl-2">
                 <label class="form-label">Sort by</label>
                 <select class="form-select" name="sort_by">
                     <?php foreach (['updated_at', 'created_at', 'due_at', 'priority', 'rank', 'status', 'title'] as $opt): ?>
@@ -108,16 +108,16 @@ if (isset($_SESSION['admin_flash_success'])) unset($_SESSION['admin_flash_succes
                     <?php endforeach; ?>
                 </select>
             </div>
-            <div class="col-md-1">
+            <div class="col-6 col-sm-4 col-md-2 col-xl-1">
                 <label class="form-label">Dir</label>
                 <select class="form-select" name="sort_dir">
                     <option value="DESC" <?= $sortDir === 'DESC' ? 'selected' : '' ?>>DESC</option>
                     <option value="ASC" <?= $sortDir === 'ASC' ? 'selected' : '' ?>>ASC</option>
                 </select>
             </div>
-            <div class="col-md-3 d-flex align-items-end gap-2">
-                <button class="btn btn-primary" type="submit">Filter</button>
-                <a class="btn btn-outline-secondary" href="/admin/">Reset</a>
+            <div class="col-12 col-sm-6 col-md-4 col-xl-3 d-flex flex-column flex-sm-row align-items-stretch align-items-sm-end gap-2">
+                <button class="btn btn-primary flex-grow-1 flex-sm-grow-0" type="submit">Filter</button>
+                <a class="btn btn-outline-secondary flex-grow-1 flex-sm-grow-0" href="/admin/">Reset</a>
             </div>
         </form>
     </div>
@@ -128,12 +128,12 @@ if (isset($_SESSION['admin_flash_success'])) unset($_SESSION['admin_flash_succes
         <h2 class="h5 mb-3">Create task</h2>
         <form method="post" action="/admin/create.php">
             <?= csrfInputField() ?>
-            <div class="row g-2 mb-2">
-                <div class="col-md-5">
+            <div class="row g-3 mb-2">
+                <div class="col-12 col-lg-5">
                     <label class="form-label">Title</label>
                     <input class="form-control" name="title" required>
                 </div>
-                <div class="col-md-2">
+                <div class="col-12 col-sm-6 col-lg-2">
                     <label class="form-label">Status</label>
                     <select class="form-select" name="status">
                         <?php foreach ($statuses as $s): ?>
@@ -143,7 +143,7 @@ if (isset($_SESSION['admin_flash_success'])) unset($_SESSION['admin_flash_succes
                         <?php endforeach; ?>
                     </select>
                 </div>
-                <div class="col-md-3">
+                <div class="col-12 col-sm-6 col-lg-3">
                     <label class="form-label">Assign to</label>
                     <select class="form-select" name="assigned_to_user_id">
                         <option value="">Unassigned</option>
@@ -152,7 +152,7 @@ if (isset($_SESSION['admin_flash_success'])) unset($_SESSION['admin_flash_succes
                         <?php endforeach; ?>
                     </select>
                 </div>
-                <div class="col-md-2">
+                <div class="col-12 col-sm-6 col-lg-2">
                     <label class="form-label">Priority</label>
                     <select class="form-select" name="priority">
                         <option value="low">low</option>
@@ -162,20 +162,20 @@ if (isset($_SESSION['admin_flash_success'])) unset($_SESSION['admin_flash_succes
                     </select>
                 </div>
             </div>
-            <div class="row g-2 mb-2">
-                <div class="col-md-3">
+            <div class="row g-3 mb-2">
+                <div class="col-12 col-sm-6 col-lg-3">
                     <label class="form-label">Due at (UTC)</label>
                     <input class="form-control" name="due_at" type="datetime-local">
                 </div>
-                <div class="col-md-3">
+                <div class="col-12 col-sm-6 col-lg-3">
                     <label class="form-label">Project</label>
                     <input class="form-control" name="project" placeholder="e.g. Platform">
                 </div>
-                <div class="col-md-2">
+                <div class="col-12 col-sm-6 col-lg-2">
                     <label class="form-label">Rank</label>
                     <input class="form-control" name="rank" type="number" value="0">
                 </div>
-                <div class="col-md-4">
+                <div class="col-12 col-lg-4">
                     <label class="form-label">Tags (comma-separated)</label>
                     <input class="form-control" name="tags" placeholder="backend,urgent,infra">
                 </div>
@@ -222,29 +222,29 @@ if (isset($_SESSION['admin_flash_success'])) unset($_SESSION['admin_flash_succes
                         <td><?= (int)$t['id'] ?></td>
                         <td><?= htmlspecialchars($t['title']) ?></td>
                         <td>
-                            <form method="post" action="/admin/update.php" class="d-flex gap-2">
+                            <form method="post" action="/admin/update.php" class="task-inline-edit d-flex flex-column flex-xl-row gap-2 align-items-stretch">
                                 <?= csrfInputField() ?>
                                 <input type="hidden" name="id" value="<?= (int)$t['id'] ?>">
-                                <select class="form-select form-select-sm" name="status" style="width: 120px;">
+                                <select class="form-select form-select-sm flex-grow-1" name="status">
                                     <?php foreach ($statuses as $s): ?>
                                         <option value="<?= htmlspecialchars($s['slug']) ?>" <?= $t['status'] === $s['slug'] ? 'selected' : '' ?>>
                                             <?= htmlspecialchars($s['slug']) ?>
                                         </option>
                                     <?php endforeach; ?>
                                 </select>
-                                <button class="btn btn-sm btn-outline-primary" type="submit">Save</button>
+                                <button class="btn btn-sm btn-outline-primary flex-shrink-0" type="submit">Save</button>
                             </form>
                         </td>
                         <td>
-                            <form method="post" action="/admin/update.php" class="d-flex gap-2">
+                            <form method="post" action="/admin/update.php" class="task-inline-edit d-flex flex-column flex-xl-row gap-2 align-items-stretch">
                                 <?= csrfInputField() ?>
                                 <input type="hidden" name="id" value="<?= (int)$t['id'] ?>">
-                                <select class="form-select form-select-sm" name="priority" style="width: 110px;">
+                                <select class="form-select form-select-sm flex-grow-1" name="priority">
                                     <?php foreach (['low', 'normal', 'high', 'urgent'] as $p): ?>
                                         <option value="<?= $p ?>" <?= ($t['priority'] ?? 'normal') === $p ? 'selected' : '' ?>><?= $p ?></option>
                                     <?php endforeach; ?>
                                 </select>
-                                <button class="btn btn-sm btn-outline-primary" type="submit">Save</button>
+                                <button class="btn btn-sm btn-outline-primary flex-shrink-0" type="submit">Save</button>
                             </form>
                         </td>
                         <td class="small"><?= htmlspecialchars((string)($t['due_at'] ?? '')) ?></td>
@@ -252,10 +252,10 @@ if (isset($_SESSION['admin_flash_success'])) unset($_SESSION['admin_flash_succes
                         <td class="small"><?= (int)($t['rank'] ?? 0) ?></td>
                         <td><?= htmlspecialchars($t['created_by_username'] ?? '') ?> (<?= (int)$t['created_by_user_id'] ?>)</td>
                         <td>
-                            <form method="post" action="/admin/update.php" class="d-flex gap-2">
+                            <form method="post" action="/admin/update.php" class="task-inline-edit d-flex flex-column flex-xl-row gap-2 align-items-stretch">
                                 <?= csrfInputField() ?>
                                 <input type="hidden" name="id" value="<?= (int)$t['id'] ?>">
-                                <select class="form-select form-select-sm" name="assigned_to_user_id" style="width: 180px;">
+                                <select class="form-select form-select-sm flex-grow-1" name="assigned_to_user_id">
                                     <option value="">Unassigned</option>
                                     <?php foreach ($users as $u): ?>
                                         <option value="<?= (int)$u['id'] ?>" <?= (string)($t['assigned_to_user_id'] ?? '') === (string)$u['id'] ? 'selected' : '' ?>>
@@ -263,7 +263,7 @@ if (isset($_SESSION['admin_flash_success'])) unset($_SESSION['admin_flash_succes
                                         </option>
                                     <?php endforeach; ?>
                                 </select>
-                                <button class="btn btn-sm btn-outline-primary" type="submit">Save</button>
+                                <button class="btn btn-sm btn-outline-primary flex-shrink-0" type="submit">Save</button>
                             </form>
                         </td>
                         <td class="small text-muted">
@@ -272,13 +272,15 @@ if (isset($_SESSION['admin_flash_success'])) unset($_SESSION['admin_flash_succes
                             W <?= (int)($t['watcher_count'] ?? 0) ?>
                         </td>
                         <td class="text-muted small"><?= htmlspecialchars($t['updated_at']) ?></td>
-                        <td class="text-end">
-                            <a class="btn btn-sm btn-outline-primary" href="/admin/view.php?id=<?= (int)$t['id'] ?>">View</a>
-                            <form method="post" action="/admin/delete.php" class="d-inline" onsubmit="return confirm('Delete task #<?= (int)$t['id'] ?>?');">
-                                <?= csrfInputField() ?>
-                                <input type="hidden" name="id" value="<?= (int)$t['id'] ?>">
-                                <button class="btn btn-sm btn-outline-danger" type="submit">Delete</button>
-                            </form>
+                        <td class="text-start text-md-end">
+                            <div class="d-flex flex-column flex-md-row gap-1 gap-md-2 justify-content-md-end">
+                                <a class="btn btn-sm btn-outline-primary" href="/admin/view.php?id=<?= (int)$t['id'] ?>">View</a>
+                                <form method="post" action="/admin/delete.php" class="m-0" onsubmit="return confirm('Delete task #<?= (int)$t['id'] ?>?');">
+                                    <?= csrfInputField() ?>
+                                    <input type="hidden" name="id" value="<?= (int)$t['id'] ?>">
+                                    <button class="btn btn-sm btn-outline-danger w-100" type="submit">Delete</button>
+                                </form>
+                            </div>
                         </td>
                     </tr>
                 <?php endforeach; ?>

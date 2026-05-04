@@ -28,7 +28,7 @@ require __DIR__ . '/_layout_top.php';
 ?>
 
 <div class="row justify-content-center">
-    <div class="col-md-6 col-lg-4">
+    <div class="col-12 col-sm-10 col-md-7 col-lg-5 col-xl-4">
         <div class="card shadow-sm">
             <div class="card-body">
                 <h1 class="h4 mb-3">Login</h1>

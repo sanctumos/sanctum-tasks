@@ -90,9 +90,9 @@ foreach (listUsers(false) as $u) {
 require __DIR__ . '/_layout_top.php';
 ?>
 
-<div class="d-flex align-items-center justify-content-between mb-3">
-    <h1 class="h3 mb-0"><?= htmlspecialchars($project['name']) ?></h1>
-    <a class="btn btn-sm btn-outline-secondary" href="/admin/workspace-projects.php">All projects</a>
+<div class="d-flex flex-column flex-sm-row align-items-stretch align-items-sm-center justify-content-between gap-2 mb-4">
+    <h1 class="h3 mb-0 text-break"><?= htmlspecialchars($project['name']) ?></h1>
+    <a class="btn btn-outline-secondary" href="/admin/workspace-projects.php">All projects</a>
 </div>
 
 <?php if ($message): ?>
@@ -106,12 +106,12 @@ require __DIR__ . '/_layout_top.php';
             <form method="post" action="/admin/workspace-project.php?id=<?= (int)$id ?>">
                 <?= csrfInputField() ?>
                 <input type="hidden" name="action" value="update">
-                <div class="row g-2">
-                    <div class="col-md-6">
+                <div class="row g-3">
+                    <div class="col-12 col-md-6">
                         <label class="form-label">Name</label>
                         <input class="form-control" name="name" required maxlength="200" value="<?= htmlspecialchars($project['name']) ?>">
                     </div>
-                    <div class="col-md-6">
+                    <div class="col-12 col-md-6">
                         <label class="form-label">Status</label>
                         <select class="form-select" name="status">
                             <?php foreach (['active', 'archived', 'trashed'] as $st): ?>

@@ -34,7 +34,7 @@ require __DIR__ . '/_layout_top.php';
 ?>
 
 <div class="row justify-content-center">
-    <div class="col-md-8 col-lg-6">
+    <div class="col-12 col-sm-10 col-md-8 col-lg-6 col-xl-5">
         <div class="card shadow-sm">
             <div class="card-body">
                 <h1 class="h4 mb-3">Change Password</h1>

@@ -37,9 +37,9 @@ $statusBadgeClass = ((int)($task['status_is_done'] ?? 0) === 1)
     : (($task['status'] ?? '') === 'doing' ? 'warning' : 'secondary');
 ?>
 
-<div class="d-flex align-items-center justify-content-between mb-3">
+<div class="d-flex flex-column flex-sm-row align-items-stretch align-items-sm-center justify-content-between gap-2 mb-4">
     <h1 class="h3 mb-0">Task #<?= (int)$task['id'] ?></h1>
-    <a class="btn btn-sm btn-outline-secondary" href="/admin/">Back to Tasks</a>
+    <a class="btn btn-outline-secondary" href="/admin/">Back to Tasks</a>
 </div>
 
 <div class="card shadow-sm mb-4">

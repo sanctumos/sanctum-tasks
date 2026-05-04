@@ -27,3 +27,6 @@ Thumbs.db
 *.log
 *.tmp
 
+# Playwright design-smoke screenshot output (regenerate locally)
+tools/design-smoke/output/
+
