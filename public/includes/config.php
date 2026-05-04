@@ -198,6 +198,25 @@ function applySanctumSchemaMigrations(SQLite3 $db): void {
         )
     ");
     ensureIndexExists($db, 'idx_user_project_pins_user', 'CREATE INDEX idx_user_project_pins_user ON user_project_pins(user_id)');
+    $db->exec("
+        CREATE TABLE IF NOT EXISTS user_organization_memberships (
+            user_id INTEGER NOT NULL,
+            org_id INTEGER NOT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (user_id, org_id),
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+            FOREIGN KEY (org_id) REFERENCES organizations(id) ON DELETE CASCADE
+        )
+    ");
+    ensureIndexExists($db, 'idx_user_org_memberships_org', 'CREATE INDEX idx_user_org_memberships_org ON user_organization_memberships(org_id)');
+    if (tableExists($db, 'users') && tableExists($db, 'user_organization_memberships')) {
+        $db->exec("
+            INSERT OR IGNORE INTO user_organization_memberships (user_id, org_id)
+            SELECT id, org_id FROM users
+            WHERE org_id IS NOT NULL AND org_id > 0
+              AND role IN ('admin', 'manager')
+        ");
+    }
 }
 
 /** Ensure at least one organization and attach users without org_id (idempotent). */

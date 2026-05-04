@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/../includes/auth.php';
+require_once __DIR__ . '/../includes/functions.php';
 $pageTitle = isset($pageTitle) ? $pageTitle : 'Sanctum Tasks';
 ?>
 <!doctype html>
@@ -33,6 +34,30 @@ $pageTitle = isset($pageTitle) ? $pageTitle : 'Sanctum Tasks';
                     <?php endif; ?>
                     <a class="btn btn-outline-light text-center text-lg-start" href="/admin/settings.php"><i class="bi bi-gear me-1"></i>Settings</a>
                     <hr class="d-lg-none border-secondary opacity-50 my-1 mx-0 w-100">
+                    <?php
+                    $layoutUser = isLoggedIn() ? getCurrentUser() : null;
+                    $layoutOrgIds = ($layoutUser && userQualifiesForMultiOrganizationMemberships($layoutUser))
+                        ? listOrganizationIdsForUserAccess($layoutUser)
+                        : [];
+                    ?>
+                    <?php if ($layoutUser !== null && count($layoutOrgIds) > 1): ?>
+                        <form method="post" action="/admin/switch-org.php" class="m-0 px-lg-2 py-1">
+                            <?= csrfInputField() ?>
+                            <label class="visually-hidden" for="active_org_select">Active organization</label>
+                            <select id="active_org_select" name="org_id" class="form-select form-select-sm bg-dark text-white border-secondary" style="max-width: 14rem;" title="New projects are created in this organization" onchange="this.form.submit()">
+                                <?php
+                                $activePick = (int)($_SESSION['active_org_id'] ?? $layoutUser['org_id'] ?? 0);
+                                foreach ($layoutOrgIds as $oid):
+                                    $ogr = getOrganizationById($oid);
+                                    if (!$ogr) {
+                                        continue;
+                                    }
+                                    ?>
+                                    <option value="<?= (int)$oid ?>" <?= $activePick === $oid ? 'selected' : '' ?>><?= htmlspecialchars($ogr['name']) ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </form>
+                    <?php endif; ?>
                     <span class="navbar-text text-white-50 small px-lg-2 py-1 text-center text-lg-start"><i class="bi bi-person-circle me-1"></i><?= htmlspecialchars($_SESSION['username'] ?? '') ?></span>
                     <form method="post" action="/admin/logout.php" class="m-0">
                         <?= csrfInputField() ?>

@@ -87,8 +87,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $canManage) {
 $members = listProjectMembers($id);
 $lists = listTodoListsForProject($currentUser, $id);
 $orgUsers = [];
+$pOrgId = (int)$project['org_id'];
 foreach (listUsers(false) as $u) {
-    if ((int)($u['org_id'] ?? 0) === (int)$project['org_id']) {
+    if (userMayAccessOrganization($u, $pOrgId)) {
         $orgUsers[] = $u;
     }
 }

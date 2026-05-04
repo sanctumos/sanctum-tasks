@@ -44,7 +44,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $projects = listDirectoryProjectsForUser($currentUser, 300);
 
 $orgLabel = '';
-$oid = isset($currentUser['org_id']) ? (int)$currentUser['org_id'] : 0;
+$oid = getEffectiveDirectoryOrgId($currentUser);
 if ($oid > 0 && ($og = getOrganizationById($oid))) {
     $orgLabel = (string)$og['name'];
 }

@@ -123,6 +123,12 @@ function login($username, $password, ?string $mfaCode = null): array {
     $_SESSION['role'] = $user['role'];
     $_SESSION['login_time'] = time();
     $_SESSION['must_change_password'] = (int)$user['must_change_password'] === 1 ? 1 : 0;
+    $primaryOrg = isset($user['org_id']) ? (int)$user['org_id'] : 0;
+    if (isAdminRole((string)$user['role']) && $primaryOrg > 0) {
+        $_SESSION['active_org_id'] = $primaryOrg;
+    } else {
+        unset($_SESSION['active_org_id']);
+    }
     getCsrfToken();
 
     createAuditLog((int)$user['id'], 'auth.login', 'session', session_id(), ['mfa_enabled' => (int)$user['mfa_enabled']]);

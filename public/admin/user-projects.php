@@ -21,10 +21,14 @@ if (!$target) {
 }
 
 $orgId = isset($target['org_id']) ? (int)$target['org_id'] : 0;
-$orgName = '—';
-if ($orgId > 0 && ($ogr = getOrganizationById($orgId))) {
-    $orgName = (string)$ogr['name'];
+$targetOrgIds = listOrganizationIdsForUserAccess($target);
+$orgNames = [];
+foreach ($targetOrgIds as $oid) {
+    if ($oid > 0 && ($ogr = getOrganizationById($oid))) {
+        $orgNames[] = (string)$ogr['name'] . ' (#' . $oid . ')';
+    }
 }
+$orgName = $orgNames !== [] ? implode(', ', $orgNames) : '—';
 
 $message = null;
 $messageType = 'success';
@@ -41,7 +45,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $want[$pid] = true;
             }
         }
-        $allInOrg = listAllDirectoryProjectsInOrganization($orgId, 500);
+        $allInOrg = [];
+        foreach ($targetOrgIds as $oid) {
+            if ($oid <= 0) {
+                continue;
+            }
+            foreach (listAllDirectoryProjectsInOrganization($oid, 500) as $proj) {
+                $allInOrg[(int)$proj['id']] = $proj;
+            }
+        }
         $hadError = false;
         foreach ($allInOrg as $proj) {
             $pid = (int)$proj['id'];
@@ -70,7 +82,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-$projects = $orgId > 0 ? listAllDirectoryProjectsInOrganization($orgId, 500) : [];
+$projects = [];
+foreach ($targetOrgIds as $oid) {
+    if ($oid <= 0) {
+        continue;
+    }
+    foreach (listAllDirectoryProjectsInOrganization($oid, 500) as $p) {
+        $projects[] = $p;
+    }
+}
+usort($projects, static function ($a, $b) {
+    return strcasecmp((string)($a['name'] ?? ''), (string)($b['name'] ?? ''));
+});
 $checked = [];
 foreach ($projects as $p) {
     if (getProjectMemberRole($userId, (int)$p['id']) !== null) {
@@ -88,8 +111,7 @@ require __DIR__ . '/_layout_top.php';
     <div class="page-header__title">
         <h1>Project access</h1>
         <div class="subtitle">
-            <code><?= htmlspecialchars($target['username']) ?></code> · org <?= htmlspecialchars($orgName) ?>
-            <?= $orgId > 0 ? '· #' . $orgId : '' ?>
+            <code><?= htmlspecialchars($target['username']) ?></code> · <?= htmlspecialchars($orgName) ?>
             <?php if (!empty((int)($target['limited_project_access'] ?? 0))): ?>
                 · <span class="status-pill status-pill--doing">limited directory</span>
             <?php endif; ?>
@@ -103,7 +125,7 @@ require __DIR__ . '/_layout_top.php';
     </div>
 <?php endif; ?>
 
-<?php if ($orgId <= 0): ?>
+<?php if ($targetOrgIds === []): ?>
     <div class="alert alert-warning">This user has no organization. Assign one on the Users page first.</div>
 <?php elseif (!$projects): ?>
     <div class="surface surface-pad"><p class="text-muted mb-0">No projects in this organization yet.</p></div>
@@ -121,6 +143,12 @@ require __DIR__ . '/_layout_top.php';
                         <span>
                             <strong><?= htmlspecialchars($p['name']) ?></strong>
                             <span class="text-muted small">#<?= (int)$p['id'] ?></span>
+                            <?php
+                            $poid = (int)($p['org_id'] ?? 0);
+                            if ($poid > 0 && ($pon = getOrganizationById($poid))):
+                            ?>
+                                <span class="badge text-bg-light border ms-1"><?= htmlspecialchars($pon['name']) ?></span>
+                            <?php endif; ?>
                             <?php if (!empty((int)$p['all_access'])): ?>
                                 <span class="badge text-bg-secondary ms-1">all-access</span>
                             <?php endif; ?>

@@ -52,7 +52,7 @@ require __DIR__ . '/_layout_top.php';
 <div class="page-header">
     <div class="page-header__title">
         <h1>Organizations</h1>
-        <div class="subtitle">Separate workspaces — users and projects belong to exactly one organization</div>
+        <div class="subtitle">Separate workspaces — members belong to one org; admins and managers can belong to several</div>
     </div>
     <div class="page-header__actions">
         <button class="btn btn-primary btn-sm" type="button" data-bs-toggle="modal" data-bs-target="#newOrgModal"><i class="bi bi-plus-lg me-1"></i>New organization</button>
@@ -99,8 +99,8 @@ require __DIR__ . '/_layout_top.php';
 <div class="surface surface-pad fine-print mb-5">
     <p class="mb-2"><strong>How tenancy works:</strong></p>
     <ul class="mb-0 small">
-        <li>Each user has an <strong>organization</strong> — they only appear in membership pickers inside that org’s projects.</li>
-        <li>Changing a user’s org removes their memberships on projects in other organizations.</li>
+        <li>Most users have a single <strong>organization</strong>. <strong>Admin</strong> and <strong>manager</strong> accounts can be granted access to multiple organizations on the Users page (shared staff).</li>
+        <li>Changing a member’s primary org removes their project memberships outside that org. Multi-org staff keep cross-org memberships unless you adjust their checkboxes.</li>
         <li><strong>Limit to assigned projects</strong> on the Users screen forces managers (and applies to everyone except admins) to only see directory projects where they’re a member or the project has <strong>all-access</strong>.</li>
     </ul>
 </div>

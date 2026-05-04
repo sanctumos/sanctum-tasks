@@ -83,7 +83,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $tgt = getUserById($userId, false);
                 $wantLimited = isset($_POST['limited_project_access']) && $tgt && (string)($tgt['role'] ?? '') !== 'admin';
                 setUserLimitedProjectAccess((int)$currentUser['id'], $userId, $wantLimited);
-                $message = 'Workspace access updated.';
+                if ($tgt && userQualifiesForMultiOrganizationMemberships($tgt)) {
+                    $extra = [];
+                    if (isset($_POST['extra_org_ids']) && is_array($_POST['extra_org_ids'])) {
+                        foreach ($_POST['extra_org_ids'] as $x) {
+                            $eid = (int)$x;
+                            if ($eid > 0) {
+                                $extra[] = $eid;
+                            }
+                        }
+                    }
+                    $allOrgs = array_values(array_unique(array_merge([$orgId], $extra)));
+                    $memRes = replaceStaffOrganizationMemberships((int)$currentUser['id'], $userId, $allOrgs);
+                    if (empty($memRes['success'])) {
+                        $message = $memRes['error'] ?? 'Primary org saved; organization membership list could not be updated';
+                        $messageType = 'warning';
+                    } else {
+                        $message = 'Workspace access updated.';
+                    }
+                } else {
+                    $message = 'Workspace access updated.';
+                }
             }
         }
     }
@@ -121,7 +141,7 @@ require __DIR__ . '/_layout_top.php';
         <thead>
             <tr>
                 <th>Username</th>
-                <th style="min-width: 148px;">Organization</th>
+                <th style="min-width: 148px;">Organizations</th>
                 <th style="min-width: 140px;">Project scope</th>
                 <th style="width: 96px;">Role</th>
                 <th style="width: 110px;">Person kind</th>
@@ -145,11 +165,24 @@ require __DIR__ . '/_layout_top.php';
                                 <?= csrfInputField() ?>
                                 <input type="hidden" name="action" value="update_workspace">
                                 <input type="hidden" name="id" value="<?= (int)$u['id'] ?>">
-                                <select class="form-select form-select-sm" name="org_id" aria-label="Organization for <?= htmlspecialchars($u['username']) ?>">
+                                <select class="form-select form-select-sm" name="org_id" aria-label="Primary organization for <?= htmlspecialchars($u['username']) ?>">
                                     <?php foreach ($orgDirectory as $o): ?>
                                         <option value="<?= (int)$o['id'] ?>" <?= isset($u['org_id']) && (int)$u['org_id'] === (int)$o['id'] ? 'selected' : '' ?>><?= htmlspecialchars($o['name']) ?> (#<?= (int)$o['id'] ?>)</option>
                                     <?php endforeach; ?>
                                 </select>
+                                <?php if (userQualifiesForMultiOrganizationMemberships($u)): ?>
+                                    <?php $memRows = listOrganizationMembershipIdsForUser((int)$u['id']); ?>
+                                    <div class="small text-muted mt-1 mb-0">Also belongs to</div>
+                                    <?php foreach ($orgDirectory as $o): ?>
+                                        <?php if ((int)$o['id'] === (int)($u['org_id'] ?? 0)) {
+                                            continue;
+                                        } ?>
+                                        <div class="form-check mb-0 py-0">
+                                            <input class="form-check-input" type="checkbox" name="extra_org_ids[]" value="<?= (int)$o['id'] ?>" id="xorg_<?= (int)$u['id'] ?>_<?= (int)$o['id'] ?>" <?= in_array((int)$o['id'], $memRows, true) ? 'checked' : '' ?>>
+                                            <label class="form-check-label small" for="xorg_<?= (int)$u['id'] ?>_<?= (int)$o['id'] ?>"><?= htmlspecialchars($o['name']) ?></label>
+                                        </div>
+                                    <?php endforeach; ?>
+                                <?php endif; ?>
                                 <?php if ((string)($u['role'] ?? '') !== 'admin'): ?>
                                     <div class="form-check">
                                         <input class="form-check-input" type="checkbox" name="limited_project_access" value="1" id="lim_<?= (int)$u['id'] ?>" <?= !empty((int)($u['limited_project_access'] ?? 0)) ? 'checked' : '' ?>>

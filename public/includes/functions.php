@@ -357,6 +357,141 @@ function getDefaultOrganizationId(): ?int {
     return $id !== null && $id !== false ? (int)$id : null;
 }
 
+/**
+ * Whether this user may belong to multiple organizations (admin + manager — shared staff).
+ */
+function userQualifiesForMultiOrganizationMemberships(array $userRow): bool {
+    return isAdminRole((string)($userRow['role'] ?? ''));
+}
+
+function ensureUserOrganizationMembershipRow(int $userId, int $orgId): void {
+    if ($userId <= 0 || $orgId <= 0) {
+        return;
+    }
+    $db = getDbConnection();
+    $stmt = $db->prepare('INSERT OR IGNORE INTO user_organization_memberships (user_id, org_id) VALUES (:u, :o)');
+    $stmt->bindValue(':u', $userId, SQLITE3_INTEGER);
+    $stmt->bindValue(':o', $orgId, SQLITE3_INTEGER);
+    $stmt->execute();
+}
+
+/** Replace membership rows for admin/manager users (primary org should be included in $orgIds). */
+function replaceStaffOrganizationMemberships(int $actorUserId, int $targetUserId, array $orgIds): array {
+    if ($targetUserId <= 0) {
+        return ['success' => false, 'error' => 'Invalid user'];
+    }
+    $tgt = getUserById($targetUserId, false);
+    if (!$tgt || !userQualifiesForMultiOrganizationMemberships($tgt)) {
+        return ['success' => false, 'error' => 'Multi-organization access applies to admin and manager roles only'];
+    }
+    $clean = [];
+    foreach ($orgIds as $oid) {
+        $oid = (int)$oid;
+        if ($oid > 0 && getOrganizationById($oid)) {
+            $clean[$oid] = true;
+        }
+    }
+    $clean = array_keys($clean);
+    sort($clean);
+    if ($clean === []) {
+        return ['success' => false, 'error' => 'At least one organization is required'];
+    }
+    $db = getDbConnection();
+    $db->exec('BEGIN');
+    try {
+        $del = $db->prepare('DELETE FROM user_organization_memberships WHERE user_id = :u');
+        $del->bindValue(':u', $targetUserId, SQLITE3_INTEGER);
+        $del->execute();
+        $ins = $db->prepare('INSERT INTO user_organization_memberships (user_id, org_id) VALUES (:u, :o)');
+        foreach ($clean as $oid) {
+            $ins->bindValue(':u', $targetUserId, SQLITE3_INTEGER);
+            $ins->bindValue(':o', $oid, SQLITE3_INTEGER);
+            $ins->execute();
+        }
+        $db->exec('COMMIT');
+        createAuditLog($actorUserId, 'user.organization_memberships_set', 'user', (string)$targetUserId, ['org_ids' => $clean]);
+        return ['success' => true];
+    } catch (Throwable $e) {
+        $db->exec('ROLLBACK');
+        return ['success' => false, 'error' => 'Could not update organization memberships'];
+    }
+}
+
+function listOrganizationMembershipIdsForUser(int $userId): array {
+    if ($userId <= 0) {
+        return [];
+    }
+    $db = getDbConnection();
+    $stmt = $db->prepare('SELECT org_id FROM user_organization_memberships WHERE user_id = :u ORDER BY org_id ASC');
+    $stmt->bindValue(':u', $userId, SQLITE3_INTEGER);
+    $res = $stmt->execute();
+    $out = [];
+    while ($row = $res->fetchArray(SQLITE3_ASSOC)) {
+        $out[] = (int)$row['org_id'];
+    }
+    return $out;
+}
+
+/**
+ * Organizations this user may access in the directory (single org for members; many for admin/manager).
+ *
+ * @return int[]
+ */
+function listOrganizationIdsForUserAccess(array $userRow): array {
+    $primary = isset($userRow['org_id']) ? (int)$userRow['org_id'] : 0;
+    if (!userQualifiesForMultiOrganizationMemberships($userRow)) {
+        return $primary > 0 ? [$primary] : [];
+    }
+    $uid = (int)($userRow['id'] ?? 0);
+    $ids = listOrganizationMembershipIdsForUser($uid);
+    if ($primary > 0) {
+        $found = false;
+        foreach ($ids as $x) {
+            if ($x === $primary) {
+                $found = true;
+                break;
+            }
+        }
+        if (!$found) {
+            $ids[] = $primary;
+            sort($ids);
+        }
+    }
+    if ($ids === [] && $primary > 0) {
+        return [$primary];
+    }
+    return $ids;
+}
+
+function userMayAccessOrganization(array $userRow, int $orgId): bool {
+    if ($orgId <= 0) {
+        return false;
+    }
+    foreach (listOrganizationIdsForUserAccess($userRow) as $oid) {
+        if ($oid === $orgId) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/**
+ * Organization used when creating a directory project (session override for multi-org staff).
+ */
+function getEffectiveDirectoryOrgId(array $userRow): int {
+    $primary = isset($userRow['org_id']) ? (int)$userRow['org_id'] : 0;
+    if (!userQualifiesForMultiOrganizationMemberships($userRow)) {
+        return $primary;
+    }
+    if (session_status() === PHP_SESSION_ACTIVE && !empty($_SESSION['active_org_id'])) {
+        $sid = (int)$_SESSION['active_org_id'];
+        if ($sid > 0 && userMayAccessOrganization($userRow, $sid)) {
+            return $sid;
+        }
+    }
+    return $primary;
+}
+
 function getUserById($id, bool $includeSensitive = false): ?array {
     $db = getDbConnection();
     $sql = $includeSensitive
@@ -467,6 +602,9 @@ function createUser(string $username, string $password, string $role = 'member',
         $stmt->execute();
         $id = (int)$db->lastInsertRowID();
         createAuditLog(null, 'user.create', 'user', (string)$id, ['username' => normalizeUsername($username), 'role' => $normalizedRole]);
+        if ($oid !== null && $oid > 0 && userQualifiesForMultiOrganizationMemberships(['role' => $normalizedRole])) {
+            ensureUserOrganizationMembershipRow($id, $oid);
+        }
         return ['success' => true, 'id' => $id];
     } catch (Throwable $e) {
         return ['success' => false, 'error' => 'Username already exists'];
@@ -1662,12 +1800,17 @@ function setUserOrganization(int $actorUserId, int $targetUserId, int $newOrgId)
     if (!$tgt) {
         return ['success' => false, 'error' => 'User not found'];
     }
-    removeUserProjectMembershipsOutsideOrganization($targetUserId, $newOrgId);
+    if (!userQualifiesForMultiOrganizationMemberships($tgt)) {
+        removeUserProjectMembershipsOutsideOrganization($targetUserId, $newOrgId);
+    }
     $db = getDbConnection();
     $stmt = $db->prepare('UPDATE users SET org_id = :oid WHERE id = :id');
     $stmt->bindValue(':oid', $newOrgId, SQLITE3_INTEGER);
     $stmt->bindValue(':id', $targetUserId, SQLITE3_INTEGER);
     $stmt->execute();
+    if (userQualifiesForMultiOrganizationMemberships($tgt)) {
+        ensureUserOrganizationMembershipRow($targetUserId, $newOrgId);
+    }
     createAuditLog($actorUserId, 'user.organization_set', 'user', (string)$targetUserId, ['org_id' => $newOrgId]);
     return ['success' => true];
 }
@@ -1725,8 +1868,20 @@ function listOrganizationsWithStats(): array {
     $db = getDbConnection();
     foreach ($orgs as &$o) {
         $oid = (int)$o['id'];
-        $st = $db->prepare('SELECT COUNT(*) FROM users WHERE org_id = :o');
-        $st->bindValue(':o', $oid, SQLITE3_INTEGER);
+        if (tableExists($db, 'user_organization_memberships')) {
+            $st = $db->prepare("
+                SELECT COUNT(*) FROM (
+                    SELECT id FROM users WHERE org_id = :o
+                    UNION
+                    SELECT user_id FROM user_organization_memberships WHERE org_id = :o2
+                )
+            ");
+            $st->bindValue(':o', $oid, SQLITE3_INTEGER);
+            $st->bindValue(':o2', $oid, SQLITE3_INTEGER);
+        } else {
+            $st = $db->prepare('SELECT COUNT(*) FROM users WHERE org_id = :o');
+            $st->bindValue(':o', $oid, SQLITE3_INTEGER);
+        }
         $res = $st->execute();
         $row = $res->fetchArray(SQLITE3_NUM);
         $o['user_count'] = $row ? (int)$row[0] : 0;
@@ -1808,8 +1963,8 @@ function userCanAccessDirectoryProject(array $userRow, ?array $project): bool {
     if (!$project) {
         return false;
     }
-    $orgId = isset($userRow['org_id']) ? (int)$userRow['org_id'] : 0;
-    if ($orgId <= 0 || (int)($project['org_id'] ?? 0) !== $orgId) {
+    $projectOrg = (int)($project['org_id'] ?? 0);
+    if ($projectOrg <= 0 || !userMayAccessOrganization($userRow, $projectOrg)) {
         return false;
     }
     if (($project['status'] ?? '') === 'trashed') {
@@ -1882,40 +2037,47 @@ function resolveTaskDirectoryProjectId(array $userRow, $projectIdRaw, bool $allo
 function listDirectoryProjectsForUser(array $userRow, int $limit = 200): array {
     $limit = max(1, min(500, $limit));
     $uid = (int)$userRow['id'];
-    $orgId = isset($userRow['org_id']) ? (int)$userRow['org_id'] : 0;
+    $orgIds = listOrganizationIdsForUserAccess($userRow);
     $pk = normalizePersonKind($userRow['person_kind'] ?? 'team_member');
     $clientOnly = ($pk === 'client');
-    if ($orgId <= 0) {
+    if ($orgIds === []) {
         return [];
     }
     $db = getDbConnection();
     $cvClause = $clientOnly ? ' AND client_visible = 1' : '';
     $cvClauseP = $clientOnly ? ' AND p.client_visible = 1' : '';
     $canSeeAll = userHasUnrestrictedOrgDirectoryAccess($userRow);
+    $inClause = [];
+    $bind = [':uid' => [$uid, SQLITE3_INTEGER], ':lim' => [$limit, SQLITE3_INTEGER]];
+    foreach ($orgIds as $i => $oid) {
+        $k = ':org' . $i;
+        $inClause[] = $k;
+        $bind[$k] = [$oid, SQLITE3_INTEGER];
+    }
+    $inSql = implode(', ', $inClause);
     if ($canSeeAll) {
-        $stmt = $db->prepare("
+        $sql = "
             SELECT id, org_id, name, description, status, client_visible, all_access, created_at, updated_at
             FROM projects
-            WHERE org_id = :org AND status != 'trashed'{$cvClause}
+            WHERE org_id IN ($inSql) AND status != 'trashed'{$cvClause}
             ORDER BY name COLLATE NOCASE ASC
             LIMIT :lim
-        ");
-        $stmt->bindValue(':org', $orgId, SQLITE3_INTEGER);
-        $stmt->bindValue(':lim', $limit, SQLITE3_INTEGER);
+        ";
     } else {
-        $stmt = $db->prepare("
+        $sql = "
             SELECT DISTINCT p.id, p.org_id, p.name, p.description, p.status, p.client_visible, p.all_access, p.created_at, p.updated_at
             FROM projects p
             LEFT JOIN project_members pm ON pm.project_id = p.id AND pm.user_id = :uid
-            WHERE p.org_id = :org
+            WHERE p.org_id IN ($inSql)
               AND p.status != 'trashed'{$cvClauseP}
               AND (p.all_access = 1 OR pm.user_id IS NOT NULL)
             ORDER BY p.name COLLATE NOCASE ASC
             LIMIT :lim
-        ");
-        $stmt->bindValue(':uid', $uid, SQLITE3_INTEGER);
-        $stmt->bindValue(':org', $orgId, SQLITE3_INTEGER);
-        $stmt->bindValue(':lim', $limit, SQLITE3_INTEGER);
+        ";
+    }
+    $stmt = $db->prepare($sql);
+    foreach ($bind as $param => $pair) {
+        $stmt->bindValue($param, $pair[0], $pair[1]);
     }
     $res = $stmt->execute();
     $items = [];
@@ -1960,7 +2122,7 @@ function createDirectoryProject(int $userId, string $name, ?string $description 
     if (!$u) {
         return ['success' => false, 'error' => 'User not found'];
     }
-    $orgId = isset($u['org_id']) ? (int)$u['org_id'] : 0;
+    $orgId = getEffectiveDirectoryOrgId($u);
     if ($orgId <= 0) {
         return ['success' => false, 'error' => 'User has no organization'];
     }
@@ -2122,7 +2284,7 @@ function addProjectMember(int $actorUserId, int $projectId, int $targetUserId, s
         return ['success' => false, 'error' => 'Insufficient permission to manage members'];
     }
     $orgId = (int)$proj['org_id'];
-    if ((int)($target['org_id'] ?? 0) !== $orgId) {
+    if (!userMayAccessOrganization($target, $orgId)) {
         return ['success' => false, 'error' => 'User is not in this organization'];
     }
     $mr = normalizeProjectMemberRole($memberRole);
@@ -2287,19 +2449,31 @@ function listUserProjectPinsForUser(array $userRow, int $limit = 200): array {
         return [];
     }
     $limit = max(1, min(500, $limit));
+    $orgIds = listOrganizationIdsForUserAccess($userRow);
+    if ($orgIds === []) {
+        return [];
+    }
     $db = getDbConnection();
-    $stmt = $db->prepare("
+    $inClause = [];
+    $bind = [':u' => [$uid, SQLITE3_INTEGER], ':lim' => [$limit, SQLITE3_INTEGER]];
+    foreach ($orgIds as $i => $oid) {
+        $k = ':o' . $i;
+        $inClause[] = $k;
+        $bind[$k] = [$oid, SQLITE3_INTEGER];
+    }
+    $inSql = implode(', ', $inClause);
+    $sql = "
         SELECT upp.project_id, upp.sort_order, p.name, p.status, p.client_visible
         FROM user_project_pins upp
         JOIN projects p ON p.id = upp.project_id
-        WHERE upp.user_id = :u AND p.org_id = :o AND p.status != 'trashed'
+        WHERE upp.user_id = :u AND p.org_id IN ($inSql) AND p.status != 'trashed'
         ORDER BY upp.sort_order ASC, p.name COLLATE NOCASE ASC
         LIMIT :lim
-    ");
-    $orgId = (int)($userRow['org_id'] ?? 0);
-    $stmt->bindValue(':u', $uid, SQLITE3_INTEGER);
-    $stmt->bindValue(':o', $orgId, SQLITE3_INTEGER);
-    $stmt->bindValue(':lim', $limit, SQLITE3_INTEGER);
+    ";
+    $stmt = $db->prepare($sql);
+    foreach ($bind as $param => $pair) {
+        $stmt->bindValue($param, $pair[0], $pair[1]);
+    }
     $res = $stmt->execute();
     $out = [];
     while ($row = $res->fetchArray(SQLITE3_ASSOC)) {
