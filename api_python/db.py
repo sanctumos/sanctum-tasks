@@ -55,6 +55,90 @@ def _ensure_index_exists(conn: sqlite3.Connection, index_name: str, sql: str) ->
         conn.execute(sql)
 
 
+def _table_exists(conn: sqlite3.Connection, table: str) -> bool:
+    _assert_identifier(table)
+    cur = conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
+        (table,),
+    )
+    return cur.fetchone() is not None
+
+
+def _apply_workspace_schema(conn: sqlite3.Connection) -> None:
+    """Organizations, person_kind, project entities, tasks.project_id (mirrors PHP applySanctumSchemaMigrations)."""
+    conn.executescript("""
+        CREATE TABLE IF NOT EXISTS organizations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            settings_json TEXT DEFAULT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    if _table_exists(conn, "users"):
+        _ensure_column_exists(conn, "users", "org_id", "INTEGER DEFAULT NULL")
+        _ensure_column_exists(conn, "users", "person_kind", "TEXT NOT NULL DEFAULT 'team_member'")
+    conn.executescript("""
+        CREATE TABLE IF NOT EXISTS projects (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            org_id INTEGER NOT NULL,
+            name TEXT NOT NULL,
+            description TEXT DEFAULT NULL,
+            status TEXT NOT NULL DEFAULT 'active',
+            client_visible INTEGER NOT NULL DEFAULT 0,
+            all_access INTEGER NOT NULL DEFAULT 0,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(org_id) REFERENCES organizations(id)
+        )
+    """)
+    _ensure_index_exists(
+        conn,
+        "idx_projects_org_name",
+        "CREATE UNIQUE INDEX idx_projects_org_name ON projects(org_id, name)",
+    )
+    _ensure_index_exists(
+        conn,
+        "idx_projects_org_status",
+        "CREATE INDEX idx_projects_org_status ON projects(org_id, status)",
+    )
+    conn.executescript("""
+        CREATE TABLE IF NOT EXISTS project_members (
+            project_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            role TEXT NOT NULL DEFAULT 'member',
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY(project_id, user_id),
+            FOREIGN KEY(project_id) REFERENCES projects(id) ON DELETE CASCADE,
+            FOREIGN KEY(user_id) REFERENCES users(id)
+        )
+    """)
+    _ensure_index_exists(
+        conn,
+        "idx_project_members_user",
+        "CREATE INDEX idx_project_members_user ON project_members(user_id)",
+    )
+    if _table_exists(conn, "tasks"):
+        _ensure_column_exists(conn, "tasks", "project_id", "INTEGER DEFAULT NULL")
+        _ensure_index_exists(
+            conn,
+            "idx_tasks_project_id",
+            "CREATE INDEX idx_tasks_project_id ON tasks(project_id)",
+        )
+
+
+def _ensure_default_organization_and_users(conn: sqlite3.Connection) -> None:
+    if not _table_exists(conn, "organizations") or not _table_exists(conn, "users"):
+        return
+    n = conn.execute("SELECT COUNT(*) FROM organizations").fetchone()[0]
+    if int(n) == 0:
+        conn.execute("INSERT INTO organizations (name) VALUES ('Default')")
+    row = conn.execute("SELECT id FROM organizations ORDER BY id ASC LIMIT 1").fetchone()
+    if not row:
+        return
+    oid = int(row[0])
+    conn.execute("UPDATE users SET org_id = ? WHERE org_id IS NULL", (oid,))
+
+
 def init_schema() -> None:
     """Idempotent schema bootstrap matching PHP initializeDatabase()."""
     global _initialized
@@ -234,6 +318,8 @@ def init_schema() -> None:
         _ensure_index_exists(conn, "idx_attachments_task", "CREATE INDEX idx_attachments_task ON task_attachments(task_id)")
         _ensure_index_exists(conn, "idx_audit_logs_action_time", "CREATE INDEX idx_audit_logs_action_time ON audit_logs(action, created_at)")
 
+        _apply_workspace_schema(conn)
+
         # Seed task statuses
         conn.executescript("""
             INSERT OR IGNORE INTO task_statuses (slug, label, sort_order, is_done, is_default) VALUES ('todo', 'To Do', 10, 0, 1);
@@ -274,6 +360,8 @@ def init_schema() -> None:
                    VALUES (?, 'bootstrap', ?, ?, ?, ?)""",
                 (admin_id, key_hash, key_hash, key_preview, admin_id),
             )
+
+        _ensure_default_organization_and_users(conn)
 
         # Python-only: api_sessions for session endpoints
         conn.executescript("""

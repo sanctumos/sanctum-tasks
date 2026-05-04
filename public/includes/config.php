@@ -115,6 +115,85 @@ function ensureIndexExists($db, $indexName, $sql) {
     }
 }
 
+function tableExists($db, string $table): bool {
+    $table = assertIdentifier($table);
+    $stmt = $db->prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = :t");
+    $stmt->bindValue(':t', $table, SQLITE3_TEXT);
+    $res = $stmt->execute();
+    return (bool)$res->fetchArray(SQLITE3_ASSOC);
+}
+
+/**
+ * Idempotent schema: organizations, users.org_id / person_kind, projects, project_members, tasks.project_id.
+ * Safe on existing databases (runs before early return in initializeDatabase).
+ */
+function applySanctumSchemaMigrations(SQLite3 $db): void {
+    $db->exec("
+        CREATE TABLE IF NOT EXISTS organizations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            settings_json TEXT DEFAULT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    ");
+    if (tableExists($db, 'users')) {
+        ensureColumnExists($db, 'users', 'org_id', 'INTEGER DEFAULT NULL');
+        ensureColumnExists($db, 'users', 'person_kind', "TEXT NOT NULL DEFAULT 'team_member'");
+    }
+    $db->exec("
+        CREATE TABLE IF NOT EXISTS projects (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            org_id INTEGER NOT NULL,
+            name TEXT NOT NULL,
+            description TEXT DEFAULT NULL,
+            status TEXT NOT NULL DEFAULT 'active',
+            client_visible INTEGER NOT NULL DEFAULT 0,
+            all_access INTEGER NOT NULL DEFAULT 0,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(org_id) REFERENCES organizations(id)
+        )
+    ");
+    ensureIndexExists($db, 'idx_projects_org_name', 'CREATE UNIQUE INDEX idx_projects_org_name ON projects(org_id, name)');
+    ensureIndexExists($db, 'idx_projects_org_status', 'CREATE INDEX idx_projects_org_status ON projects(org_id, status)');
+    $db->exec("
+        CREATE TABLE IF NOT EXISTS project_members (
+            project_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            role TEXT NOT NULL DEFAULT 'member',
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY(project_id, user_id),
+            FOREIGN KEY(project_id) REFERENCES projects(id) ON DELETE CASCADE,
+            FOREIGN KEY(user_id) REFERENCES users(id)
+        )
+    ");
+    ensureIndexExists($db, 'idx_project_members_user', 'CREATE INDEX idx_project_members_user ON project_members(user_id)');
+    if (tableExists($db, 'tasks')) {
+        ensureColumnExists($db, 'tasks', 'project_id', 'INTEGER DEFAULT NULL');
+        ensureIndexExists($db, 'idx_tasks_project_id', 'CREATE INDEX idx_tasks_project_id ON tasks(project_id)');
+    }
+}
+
+/** Ensure at least one organization and attach users without org_id (idempotent). */
+function ensureDefaultOrganizationAndUsers(SQLite3 $db): void {
+    if (!tableExists($db, 'organizations') || !tableExists($db, 'users')) {
+        return;
+    }
+    $n = (int)$db->querySingle('SELECT COUNT(*) FROM organizations');
+    if ($n === 0) {
+        $stmt = $db->prepare('INSERT INTO organizations (name) VALUES (:name)');
+        $stmt->bindValue(':name', 'Default', SQLITE3_TEXT);
+        $stmt->execute();
+    }
+    $orgId = (int)$db->querySingle('SELECT id FROM organizations ORDER BY id ASC LIMIT 1');
+    if ($orgId < 1) {
+        return;
+    }
+    $upd = $db->prepare('UPDATE users SET org_id = :oid WHERE org_id IS NULL');
+    $upd->bindValue(':oid', $orgId, SQLITE3_INTEGER);
+    $upd->execute();
+}
+
 function ensureDirExists(string $dir): void {
     if (!is_dir($dir)) {
         @mkdir($dir, 0750, true);
@@ -174,15 +253,21 @@ function getMfaEncryptionKey(): string {
 }
 
 function initializeDatabase() {
-    static $initialized = false;
-    if ($initialized) {
+    /** @var bool Core DDL + bootstrap already applied for this PHP worker */
+    static $bootstrappedCore = false;
+
+    $db = getDbConnection();
+    applySanctumSchemaMigrations($db);
+
+    if ($bootstrappedCore) {
+        ensureDefaultOrganizationAndUsers($db);
         return;
     }
 
-    $db = getDbConnection();
     try {
         $db->querySingle("SELECT 1 FROM task_statuses LIMIT 1");
-        $initialized = true;
+        ensureDefaultOrganizationAndUsers($db);
+        $bootstrappedCore = true;
         return;
     } catch (Throwable $e) {
     }
@@ -373,6 +458,8 @@ function initializeDatabase() {
     ensureIndexExists($db, 'idx_attachments_task', 'CREATE INDEX idx_attachments_task ON task_attachments(task_id)');
     ensureIndexExists($db, 'idx_audit_logs_action_time', 'CREATE INDEX idx_audit_logs_action_time ON audit_logs(action, created_at)');
 
+    applySanctumSchemaMigrations($db);
+
     // Seed status workflow if empty.
     $db->exec("INSERT OR IGNORE INTO task_statuses (slug, label, sort_order, is_done, is_default) VALUES ('todo', 'To Do', 10, 0, 1)");
     $db->exec("INSERT OR IGNORE INTO task_statuses (slug, label, sort_order, is_done, is_default) VALUES ('doing', 'In Progress', 20, 0, 0)");
@@ -429,11 +516,13 @@ function initializeDatabase() {
         $ins->execute();
     }
 
+    ensureDefaultOrganizationAndUsers($db);
+
     $db->exec('COMMIT');
     } catch (Throwable $e) {
         $db->exec('ROLLBACK');
         throw $e;
     }
-    $initialized = true;
+    $bootstrappedCore = true;
 }
 

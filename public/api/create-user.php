@@ -18,8 +18,10 @@ $role = (string)($body['role'] ?? 'member');
 $mustChangePassword = !isset($body['must_change_password']) || (bool)$body['must_change_password'];
 $createApiKey = isset($body['create_api_key']) && (bool)$body['create_api_key'];
 $apiKeyName = (string)($body['api_key_name'] ?? 'default');
+$orgId = isset($body['org_id']) ? (int)$body['org_id'] : null;
+$personKind = (string)($body['person_kind'] ?? 'team_member');
 
-$createResult = createUser($username, $password, $role, $mustChangePassword);
+$createResult = createUser($username, $password, $role, $mustChangePassword, $orgId, $personKind);
 if (!$createResult['success']) {
     apiError('user.create_failed', $createResult['error'] ?? 'Create user failed', 400);
 }

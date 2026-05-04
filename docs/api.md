@@ -135,13 +135,21 @@ Convenience fields:
 
 ## Taxonomy helpers
 
-- `GET /api/list-projects.php`
+- `GET /api/list-projects.php` — distinct non-empty `tasks.project` strings with task counts (legacy string grouping).
 - `GET /api/list-tags.php`
+
+## Workspace (organizations & project directory)
+
+First-class **organizations** and **projects** (Basecamp-shaped directory). Users gain `org_id` and `person_kind` (`team_member` \| `client`); API responses include these fields where users are returned.
+
+- `GET /api/list-organizations.php` — organizations visible to the caller (admins/managers: all; others: their org only).
+- `GET /api/list-directory-projects.php` — project rows in the user’s org (`limit` query param); visibility uses `all_access`, `project_members`, or admin/manager override.
+- `POST /api/create-directory-project.php` — JSON: `name`, optional `description`, optional `client_visible`, optional `all_access`; creator becomes project **lead** in `project_members`.
 
 ## Users (admin)
 
 - `GET /api/list-users.php`
-- `POST /api/create-user.php`
+- `POST /api/create-user.php` — optional `org_id`, optional `person_kind` (`team_member` \| `client`); defaults to first organization and `team_member` when omitted.
 - `POST /api/disable-user.php` (`is_active` controls enable/disable)
 - `POST /api/reset-user-password.php`
 
@@ -154,7 +162,7 @@ Convenience fields:
 ## Session/auth endpoints (cookie-based)
 
 - `POST /api/session-login.php` (`username`, `password`, optional `mfa_code`)
-- `GET /api/session-me.php`
+- `GET /api/session-me.php` — `user` includes `org_id` and `person_kind` when present
 - `POST /api/session-logout.php` (requires CSRF token when logged in)
 
 ## Auditing

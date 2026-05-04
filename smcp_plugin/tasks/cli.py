@@ -332,6 +332,38 @@ def list_projects(args: Dict[str, Any], api_key: str) -> Dict[str, Any]:
     return _wrap(run)
 
 
+def list_organizations(args: Dict[str, Any], api_key: str) -> Dict[str, Any]:
+    def run() -> Dict[str, Any]:
+        client = get_client(api_key)
+        orgs = client.list_organizations()
+        return _success(organizations=orgs, count=len(orgs))
+
+    return _wrap(run)
+
+
+def list_directory_projects(args: Dict[str, Any], api_key: str) -> Dict[str, Any]:
+    def run() -> Dict[str, Any]:
+        client = get_client(api_key)
+        projects = client.list_directory_projects(limit=int(args.get("limit", 200)))
+        return _success(projects=projects, count=len(projects))
+
+    return _wrap(run)
+
+
+def create_directory_project(args: Dict[str, Any], api_key: str) -> Dict[str, Any]:
+    def run() -> Dict[str, Any]:
+        client = get_client(api_key)
+        body = client.create_directory_project(
+            name=str(args["name"]),
+            description=args.get("description"),
+            client_visible=bool(args.get("client-visible", False)),
+            all_access=bool(args.get("all-access", False)),
+        )
+        return _success(project=body)
+
+    return _wrap(run)
+
+
 def list_tags(args: Dict[str, Any], api_key: str) -> Dict[str, Any]:
     def run() -> Dict[str, Any]:
         client = get_client(api_key)
@@ -527,6 +559,9 @@ def command_handlers() -> Dict[str, Callable[[Dict[str, Any], str], Dict[str, An
         "list-statuses": list_statuses,
         "create-status": create_status,
         "list-projects": list_projects,
+        "list-organizations": list_organizations,
+        "list-directory-projects": list_directory_projects,
+        "create-directory-project": create_directory_project,
         "list-tags": list_tags,
         "list-comments": list_comments,
         "create-comment": create_comment,
@@ -686,6 +721,20 @@ def build_parser() -> argparse.ArgumentParser:
     p = subparsers.add_parser("list-projects", help="GET /api/list-projects.php")
     add_api_key(p)
     p.add_argument("--limit", type=int, default=200)
+
+    p = subparsers.add_parser("list-organizations", help="GET /api/list-organizations.php")
+    add_api_key(p)
+
+    p = subparsers.add_parser("list-directory-projects", help="GET /api/list-directory-projects.php (project entities)")
+    add_api_key(p)
+    p.add_argument("--limit", type=int, default=200)
+
+    p = subparsers.add_parser("create-directory-project", help="POST /api/create-directory-project.php")
+    add_api_key(p)
+    p.add_argument("--name", required=True, help="Project name")
+    p.add_argument("--description", dest="description", default=None)
+    p.add_argument("--client-visible", action="store_true", dest="client_visible")
+    p.add_argument("--all-access", action="store_true", dest="all_access")
 
     p = subparsers.add_parser("list-tags", help="GET /api/list-tags.php")
     add_api_key(p)

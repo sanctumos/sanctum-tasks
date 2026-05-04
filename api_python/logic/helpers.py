@@ -128,6 +128,11 @@ def normalize_username(username: str) -> str:
     return str(username).lower().strip()
 
 
+def normalize_person_kind(raw: Any) -> str:
+    s = str(raw or "team_member").strip().lower()
+    return "client" if s == "client" else "team_member"
+
+
 def validate_username(username: str, min_length: int = 3, max_length: int = 50) -> str | None:
     u = normalize_username(username)
     if not u:

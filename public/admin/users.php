@@ -22,7 +22,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $password = (string)($_POST['password'] ?? '');
         $role = (string)($_POST['role'] ?? 'member');
         $mustChange = isset($_POST['must_change_password']) ? (bool)$_POST['must_change_password'] : true;
-        $result = createUser($username, $password, $role, $mustChange);
+        $personKind = normalizePersonKind((string)($_POST['person_kind'] ?? 'team_member'));
+        $result = createUser($username, $password, $role, $mustChange, null, $personKind);
         if ($result['success']) {
             $message = 'User created successfully';
             $messageType = 'success';
@@ -88,11 +89,11 @@ require __DIR__ . '/_layout_top.php';
             <?= csrfInputField() ?>
             <input type="hidden" name="action" value="create">
             <div class="row g-2">
-                <div class="col-md-4">
+                <div class="col-md-3">
                     <label class="form-label">Username</label>
                     <input class="form-control" name="username" required>
                 </div>
-                <div class="col-md-4">
+                <div class="col-md-3">
                     <label class="form-label">Temporary Password</label>
                     <input class="form-control" type="password" name="password" required>
                 </div>
@@ -102,6 +103,13 @@ require __DIR__ . '/_layout_top.php';
                         <?php foreach (['member', 'manager', 'admin', 'api'] as $role): ?>
                             <option value="<?= $role ?>" <?= $role === 'member' ? 'selected' : '' ?>><?= $role ?></option>
                         <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Person kind</label>
+                    <select class="form-select" name="person_kind" title="Team member vs client (Basecamp-style)">
+                        <option value="team_member" selected>team_member</option>
+                        <option value="client">client</option>
                     </select>
                 </div>
                 <div class="col-md-2 d-flex align-items-end">
@@ -126,6 +134,8 @@ require __DIR__ . '/_layout_top.php';
                     <th>ID</th>
                     <th>Username</th>
                     <th>Role</th>
+                    <th>Org</th>
+                    <th>Person kind</th>
                     <th>Active</th>
                     <th>MFA</th>
                     <th>Must Change Password</th>
@@ -139,6 +149,8 @@ require __DIR__ . '/_layout_top.php';
                         <td><?= (int)$u['id'] ?></td>
                         <td><?= htmlspecialchars($u['username']) ?></td>
                         <td><?= htmlspecialchars($u['role']) ?></td>
+                        <td><?= isset($u['org_id']) && $u['org_id'] !== null ? (int)$u['org_id'] : '—' ?></td>
+                        <td><?= htmlspecialchars($u['person_kind'] ?? 'team_member') ?></td>
                         <td><?= (int)$u['is_active'] === 1 ? 'Yes' : 'No' ?></td>
                         <td><?= (int)$u['mfa_enabled'] === 1 ? 'Enabled' : 'Disabled' ?></td>
                         <td><?= (int)$u['must_change_password'] === 1 ? 'Yes' : 'No' ?></td>

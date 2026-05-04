@@ -442,6 +442,8 @@ class TasksClient:
         must_change_password: bool = True,
         create_api_key: bool = False,
         api_key_name: str = 'default',
+        org_id: Optional[int] = None,
+        person_kind: Optional[str] = None,
     ) -> Dict[str, Any]:
         payload = {
             'username': username,
@@ -451,6 +453,10 @@ class TasksClient:
             'create_api_key': create_api_key,
             'api_key_name': api_key_name,
         }
+        if org_id is not None:
+            payload['org_id'] = org_id
+        if person_kind is not None:
+            payload['person_kind'] = person_kind
         return self._request('POST', 'create-user.php', data=payload)
 
     def disable_user(self, user_id: int, is_active: bool = False) -> Dict[str, Any]:
@@ -537,6 +543,32 @@ class TasksClient:
     def list_projects(self, limit: int = 200) -> List[Dict[str, Any]]:
         response = self._request('GET', 'list-projects.php', params={'limit': limit})
         return response.get('projects', [])
+
+    def list_organizations(self) -> List[Dict[str, Any]]:
+        response = self._request('GET', 'list-organizations.php')
+        return response.get('organizations', [])
+
+    def list_directory_projects(self, limit: int = 200) -> List[Dict[str, Any]]:
+        response = self._request('GET', 'list-directory-projects.php', params={'limit': limit})
+        return response.get('projects', [])
+
+    def create_directory_project(
+        self,
+        name: str,
+        description: Optional[str] = None,
+        client_visible: bool = False,
+        all_access: bool = False,
+    ) -> Dict[str, Any]:
+        payload: Dict[str, Any] = {
+            'name': name,
+            'client_visible': client_visible,
+            'all_access': all_access,
+        }
+        if description is not None:
+            payload['description'] = description
+        response = self._request('POST', 'create-directory-project.php', data=payload)
+        data = response.get('data') or response
+        return data.get('project', data) if isinstance(data, dict) else data
 
     def list_tags(self, limit: int = 200) -> List[Dict[str, Any]]:
         response = self._request('GET', 'list-tags.php', params={'limit': limit})

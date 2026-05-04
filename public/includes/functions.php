@@ -346,11 +346,22 @@ function createTaskStatus(string $slug, string $label, int $sortOrder = 100, boo
 // --------------------
 // Users
 // --------------------
+function normalizePersonKind(?string $raw): string {
+    $s = strtolower(trim((string)$raw));
+    return $s === 'client' ? 'client' : 'team_member';
+}
+
+function getDefaultOrganizationId(): ?int {
+    $db = getDbConnection();
+    $id = $db->querySingle('SELECT id FROM organizations ORDER BY id ASC LIMIT 1');
+    return $id !== null && $id !== false ? (int)$id : null;
+}
+
 function getUserById($id, bool $includeSensitive = false): ?array {
     $db = getDbConnection();
     $sql = $includeSensitive
-        ? "SELECT id, username, role, is_active, must_change_password, mfa_enabled, mfa_secret, password_hash, created_at FROM users WHERE id = :id LIMIT 1"
-        : "SELECT id, username, role, is_active, must_change_password, mfa_enabled, created_at FROM users WHERE id = :id LIMIT 1";
+        ? "SELECT id, username, role, is_active, must_change_password, mfa_enabled, mfa_secret, password_hash, org_id, person_kind, created_at FROM users WHERE id = :id LIMIT 1"
+        : "SELECT id, username, role, is_active, must_change_password, mfa_enabled, org_id, person_kind, created_at FROM users WHERE id = :id LIMIT 1";
     $stmt = $db->prepare($sql);
     $stmt->bindValue(':id', (int)$id, SQLITE3_INTEGER);
     $res = $stmt->execute();
@@ -359,6 +370,10 @@ function getUserById($id, bool $includeSensitive = false): ?array {
         $row['is_active'] = (int)$row['is_active'];
         $row['must_change_password'] = (int)$row['must_change_password'];
         $row['mfa_enabled'] = (int)$row['mfa_enabled'];
+        if (isset($row['org_id']) && $row['org_id'] !== null) {
+            $row['org_id'] = (int)$row['org_id'];
+        }
+        $row['person_kind'] = normalizePersonKind($row['person_kind'] ?? 'team_member');
     }
     return $row;
 }
@@ -366,8 +381,8 @@ function getUserById($id, bool $includeSensitive = false): ?array {
 function getUserByUsername($username, bool $includeSensitive = false): ?array {
     $db = getDbConnection();
     $sql = $includeSensitive
-        ? "SELECT id, username, role, is_active, must_change_password, mfa_enabled, mfa_secret, password_hash, created_at FROM users WHERE username = :u LIMIT 1"
-        : "SELECT id, username, role, is_active, must_change_password, mfa_enabled, created_at FROM users WHERE username = :u LIMIT 1";
+        ? "SELECT id, username, role, is_active, must_change_password, mfa_enabled, mfa_secret, password_hash, org_id, person_kind, created_at FROM users WHERE username = :u LIMIT 1"
+        : "SELECT id, username, role, is_active, must_change_password, mfa_enabled, org_id, person_kind, created_at FROM users WHERE username = :u LIMIT 1";
     $stmt = $db->prepare($sql);
     $stmt->bindValue(':u', normalizeUsername((string)$username), SQLITE3_TEXT);
     $res = $stmt->execute();
@@ -376,6 +391,10 @@ function getUserByUsername($username, bool $includeSensitive = false): ?array {
         $row['is_active'] = (int)$row['is_active'];
         $row['must_change_password'] = (int)$row['must_change_password'];
         $row['mfa_enabled'] = (int)$row['mfa_enabled'];
+        if (isset($row['org_id']) && $row['org_id'] !== null) {
+            $row['org_id'] = (int)$row['org_id'];
+        }
+        $row['person_kind'] = normalizePersonKind($row['person_kind'] ?? 'team_member');
     }
     return $row;
 }
@@ -383,7 +402,7 @@ function getUserByUsername($username, bool $includeSensitive = false): ?array {
 function listUsers(bool $includeDisabled = false): array {
     $db = getDbConnection();
     $sql = "
-        SELECT id, username, role, is_active, must_change_password, mfa_enabled, created_at
+        SELECT id, username, role, is_active, must_change_password, mfa_enabled, org_id, person_kind, created_at
         FROM users
         " . ($includeDisabled ? "" : "WHERE is_active = 1") . "
         ORDER BY username ASC
@@ -394,12 +413,16 @@ function listUsers(bool $includeDisabled = false): array {
         $row['is_active'] = (int)$row['is_active'];
         $row['must_change_password'] = (int)$row['must_change_password'];
         $row['mfa_enabled'] = (int)$row['mfa_enabled'];
+        if (isset($row['org_id']) && $row['org_id'] !== null) {
+            $row['org_id'] = (int)$row['org_id'];
+        }
+        $row['person_kind'] = normalizePersonKind($row['person_kind'] ?? 'team_member');
         $users[] = $row;
     }
     return $users;
 }
 
-function createUser(string $username, string $password, string $role = 'member', bool $mustChangePassword = true): array {
+function createUser(string $username, string $password, string $role = 'member', bool $mustChangePassword = true, ?int $orgId = null, string $personKind = 'team_member'): array {
     $usernameError = validateUsername($username);
     if ($usernameError) {
         return ['success' => false, 'error' => $usernameError];
@@ -413,15 +436,23 @@ function createUser(string $username, string $password, string $role = 'member',
         return ['success' => false, 'error' => 'Invalid role'];
     }
 
+    $oid = $orgId ?? getDefaultOrganizationId();
+    if ($oid === null || $oid <= 0) {
+        return ['success' => false, 'error' => 'No organization configured'];
+    }
+    $pk = normalizePersonKind($personKind);
+
     $db = getDbConnection();
     $stmt = $db->prepare("
-        INSERT INTO users (username, password_hash, role, is_active, must_change_password)
-        VALUES (:username, :hash, :role, 1, :must_change_password)
+        INSERT INTO users (username, password_hash, role, is_active, must_change_password, org_id, person_kind)
+        VALUES (:username, :hash, :role, 1, :must_change_password, :org_id, :person_kind)
     ");
     $stmt->bindValue(':username', normalizeUsername($username), SQLITE3_TEXT);
     $stmt->bindValue(':hash', password_hash($password, PASSWORD_BCRYPT, ['cost' => PASSWORD_COST]), SQLITE3_TEXT);
     $stmt->bindValue(':role', $normalizedRole, SQLITE3_TEXT);
     $stmt->bindValue(':must_change_password', $mustChangePassword ? 1 : 0, SQLITE3_INTEGER);
+    $stmt->bindValue(':org_id', $oid, SQLITE3_INTEGER);
+    $stmt->bindValue(':person_kind', $pk, SQLITE3_TEXT);
 
     try {
         $stmt->execute();
@@ -1388,6 +1419,146 @@ function deleteTask($id): array {
     $stmt->execute();
     createAuditLog(null, 'task.delete', 'task', (string)$id);
     return ['success' => true];
+}
+
+function listOrganizations(): array {
+    $db = getDbConnection();
+    $res = $db->query('SELECT id, name, settings_json, created_at FROM organizations ORDER BY id ASC');
+    $rows = [];
+    while ($row = $res->fetchArray(SQLITE3_ASSOC)) {
+        $rows[] = $row;
+    }
+    return $rows;
+}
+
+/**
+ * Project entities (directory) visible to the given user within their org.
+ */
+function listDirectoryProjectsForUser(array $userRow, int $limit = 200): array {
+    $limit = max(1, min(500, $limit));
+    $uid = (int)$userRow['id'];
+    $orgId = isset($userRow['org_id']) ? (int)$userRow['org_id'] : 0;
+    $role = (string)($userRow['role'] ?? 'member');
+    if ($orgId <= 0) {
+        return [];
+    }
+    $db = getDbConnection();
+    $canSeeAll = in_array($role, ['admin', 'manager'], true);
+    if ($canSeeAll) {
+        $stmt = $db->prepare("
+            SELECT id, org_id, name, description, status, client_visible, all_access, created_at, updated_at
+            FROM projects
+            WHERE org_id = :org AND status != 'trashed'
+            ORDER BY name COLLATE NOCASE ASC
+            LIMIT :lim
+        ");
+        $stmt->bindValue(':org', $orgId, SQLITE3_INTEGER);
+        $stmt->bindValue(':lim', $limit, SQLITE3_INTEGER);
+    } else {
+        $stmt = $db->prepare("
+            SELECT DISTINCT p.id, p.org_id, p.name, p.description, p.status, p.client_visible, p.all_access, p.created_at, p.updated_at
+            FROM projects p
+            LEFT JOIN project_members pm ON pm.project_id = p.id AND pm.user_id = :uid
+            WHERE p.org_id = :org
+              AND p.status != 'trashed'
+              AND (p.all_access = 1 OR pm.user_id IS NOT NULL)
+            ORDER BY p.name COLLATE NOCASE ASC
+            LIMIT :lim
+        ");
+        $stmt->bindValue(':uid', $uid, SQLITE3_INTEGER);
+        $stmt->bindValue(':org', $orgId, SQLITE3_INTEGER);
+        $stmt->bindValue(':lim', $limit, SQLITE3_INTEGER);
+    }
+    $res = $stmt->execute();
+    $items = [];
+    while ($row = $res->fetchArray(SQLITE3_ASSOC)) {
+        $row['id'] = (int)$row['id'];
+        $row['org_id'] = (int)$row['org_id'];
+        $row['client_visible'] = (int)$row['client_visible'];
+        $row['all_access'] = (int)$row['all_access'];
+        $items[] = $row;
+    }
+    return $items;
+}
+
+function getDirectoryProjectById(int $id): ?array {
+    if ($id <= 0) {
+        return null;
+    }
+    $db = getDbConnection();
+    $stmt = $db->prepare('
+        SELECT id, org_id, name, description, status, client_visible, all_access, created_at, updated_at
+        FROM projects WHERE id = :id LIMIT 1
+    ');
+    $stmt->bindValue(':id', $id, SQLITE3_INTEGER);
+    $res = $stmt->execute();
+    $row = $res->fetchArray(SQLITE3_ASSOC);
+    if (!$row) {
+        return null;
+    }
+    $row['id'] = (int)$row['id'];
+    $row['org_id'] = (int)$row['org_id'];
+    $row['client_visible'] = (int)$row['client_visible'];
+    $row['all_access'] = (int)$row['all_access'];
+    return $row;
+}
+
+function createDirectoryProject(int $userId, string $name, ?string $description = null, bool $clientVisible = false, bool $allAccess = false): array {
+    $name = trim($name);
+    if ($name === '') {
+        return ['success' => false, 'error' => 'Project name is required'];
+    }
+    $u = getUserById($userId, false);
+    if (!$u) {
+        return ['success' => false, 'error' => 'User not found'];
+    }
+    $orgId = isset($u['org_id']) ? (int)$u['org_id'] : 0;
+    if ($orgId <= 0) {
+        return ['success' => false, 'error' => 'User has no organization'];
+    }
+    $role = (string)($u['role'] ?? 'member');
+    if (!in_array($role, ['admin', 'manager', 'member'], true)) {
+        return ['success' => false, 'error' => 'Insufficient permission to create projects'];
+    }
+    $db = getDbConnection();
+    $now = gmdate('Y-m-d H:i:s');
+    try {
+        $stmt = $db->prepare("
+            INSERT INTO projects (org_id, name, description, status, client_visible, all_access, created_at, updated_at)
+            VALUES (:org, :name, :descr, 'active', :cv, :aa, :c1, :c2)
+        ");
+        $stmt->bindValue(':org', $orgId, SQLITE3_INTEGER);
+        $stmt->bindValue(':name', $name, SQLITE3_TEXT);
+        $descrVal = ($description !== null && trim($description) !== '') ? trim($description) : null;
+        if ($descrVal === null) {
+            $stmt->bindValue(':descr', null, SQLITE3_NULL);
+        } else {
+            $stmt->bindValue(':descr', $descrVal, SQLITE3_TEXT);
+        }
+        $stmt->bindValue(':cv', $clientVisible ? 1 : 0, SQLITE3_INTEGER);
+        $stmt->bindValue(':aa', $allAccess ? 1 : 0, SQLITE3_INTEGER);
+        $stmt->bindValue(':c1', $now, SQLITE3_TEXT);
+        $stmt->bindValue(':c2', $now, SQLITE3_TEXT);
+        $stmt->execute();
+        $pid = (int)$db->lastInsertRowID();
+        $m = $db->prepare('INSERT INTO project_members (project_id, user_id, role) VALUES (:p, :u, :r)');
+        $m->bindValue(':p', $pid, SQLITE3_INTEGER);
+        $m->bindValue(':u', $userId, SQLITE3_INTEGER);
+        $m->bindValue(':r', 'lead', SQLITE3_TEXT);
+        $m->execute();
+        createAuditLog($userId, 'project.create', 'project', (string)$pid, ['name' => $name, 'org_id' => $orgId]);
+        return [
+            'success' => true,
+            'id' => $pid,
+            'org_id' => $orgId,
+            'name' => $name,
+        ];
+    } catch (Throwable $e) {
+        if (strpos($e->getMessage(), 'UNIQUE') !== false) {
+            return ['success' => false, 'error' => 'A project with this name already exists in your organization'];
+        }
+        return ['success' => false, 'error' => 'Could not create project'];
+    }
 }
 
 function listProjects(int $limit = 100): array {

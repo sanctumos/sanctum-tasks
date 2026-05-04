@@ -1,6 +1,6 @@
 """User lookup mirroring PHP getUserById, getUserByUsername."""
 from .. import db
-from .helpers import normalize_username
+from .helpers import normalize_person_kind, normalize_username
 
 
 def get_user_by_id(user_id: int, include_sensitive: bool = False) -> dict | None:
@@ -8,12 +8,12 @@ def get_user_by_id(user_id: int, include_sensitive: bool = False) -> dict | None
     conn = db.get_connection()
     if include_sensitive:
         cur = conn.execute(
-            "SELECT id, username, role, is_active, must_change_password, mfa_enabled, mfa_secret, password_hash, created_at FROM users WHERE id = ? LIMIT 1",
+            "SELECT id, username, role, is_active, must_change_password, mfa_enabled, mfa_secret, password_hash, org_id, person_kind, created_at FROM users WHERE id = ? LIMIT 1",
             (int(user_id),),
         )
     else:
         cur = conn.execute(
-            "SELECT id, username, role, is_active, must_change_password, mfa_enabled, created_at FROM users WHERE id = ? LIMIT 1",
+            "SELECT id, username, role, is_active, must_change_password, mfa_enabled, org_id, person_kind, created_at FROM users WHERE id = ? LIMIT 1",
             (int(user_id),),
         )
     row = cur.fetchone()
@@ -24,6 +24,9 @@ def get_user_by_id(user_id: int, include_sensitive: bool = False) -> dict | None
     r["is_active"] = int(r.get("is_active", 0))
     r["must_change_password"] = int(r.get("must_change_password", 0))
     r["mfa_enabled"] = int(r.get("mfa_enabled", 0))
+    if r.get("org_id") is not None:
+        r["org_id"] = int(r["org_id"])
+    r["person_kind"] = normalize_person_kind(r.get("person_kind"))
     return r
 
 
@@ -35,12 +38,12 @@ def get_user_by_username(username: str, include_sensitive: bool = False) -> dict
     conn = db.get_connection()
     if include_sensitive:
         cur = conn.execute(
-            "SELECT id, username, role, is_active, must_change_password, mfa_enabled, mfa_secret, password_hash, created_at FROM users WHERE username = ? LIMIT 1",
+            "SELECT id, username, role, is_active, must_change_password, mfa_enabled, mfa_secret, password_hash, org_id, person_kind, created_at FROM users WHERE username = ? LIMIT 1",
             (u,),
         )
     else:
         cur = conn.execute(
-            "SELECT id, username, role, is_active, must_change_password, mfa_enabled, created_at FROM users WHERE username = ? LIMIT 1",
+            "SELECT id, username, role, is_active, must_change_password, mfa_enabled, org_id, person_kind, created_at FROM users WHERE username = ? LIMIT 1",
             (u,),
         )
     row = cur.fetchone()
@@ -51,4 +54,7 @@ def get_user_by_username(username: str, include_sensitive: bool = False) -> dict
     r["is_active"] = int(r.get("is_active", 0))
     r["must_change_password"] = int(r.get("must_change_password", 0))
     r["mfa_enabled"] = int(r.get("mfa_enabled", 0))
+    if r.get("org_id") is not None:
+        r["org_id"] = int(r["org_id"])
+    r["person_kind"] = normalize_person_kind(r.get("person_kind"))
     return r

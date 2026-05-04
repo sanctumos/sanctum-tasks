@@ -8,6 +8,7 @@ from .helpers import (
     validate_password,
     normalize_role,
     generate_temporary_password,
+    normalize_person_kind,
 )
 from . import audit
 
@@ -15,7 +16,7 @@ from . import audit
 def list_users(include_disabled: bool = False) -> list[dict]:
     db.init_schema()
     conn = db.get_connection()
-    sql = """SELECT id, username, role, is_active, must_change_password, mfa_enabled, created_at FROM users"""
+    sql = """SELECT id, username, role, is_active, must_change_password, mfa_enabled, org_id, person_kind, created_at FROM users"""
     if not include_disabled:
         sql += " WHERE is_active = 1"
     sql += " ORDER BY username ASC"
@@ -26,6 +27,9 @@ def list_users(include_disabled: bool = False) -> list[dict]:
         r["is_active"] = int(r.get("is_active", 0))
         r["must_change_password"] = int(r.get("must_change_password", 0))
         r["mfa_enabled"] = int(r.get("mfa_enabled", 0))
+        if r.get("org_id") is not None:
+            r["org_id"] = int(r["org_id"])
+        r["person_kind"] = normalize_person_kind(r.get("person_kind"))
     return rows
 
 
@@ -34,6 +38,8 @@ def create_user(
     password: str,
     role: str = "member",
     must_change_password: bool = True,
+    org_id: int | None = None,
+    person_kind: str = "team_member",
 ) -> dict:
     err = validate_username(username)
     if err:
@@ -46,11 +52,26 @@ def create_user(
         return {"success": False, "error": "Invalid role"}
     conn = db.get_connection()
     try:
+        oid = org_id
+        if oid is None:
+            row = conn.execute("SELECT id FROM organizations ORDER BY id ASC LIMIT 1").fetchone()
+            oid = int(row[0]) if row else None
+        if oid is None:
+            conn.close()
+            return {"success": False, "error": "No organization configured"}
+        pk = normalize_person_kind(person_kind)
         pw_hash = bcrypt.hashpw(password.encode(), bcrypt.gensalt(rounds=config.PASSWORD_COST)).decode()
         conn.execute(
-            """INSERT INTO users (username, password_hash, role, is_active, must_change_password)
-               VALUES (?, ?, ?, 1, ?)""",
-            (normalize_username(username), pw_hash, normalized_role, 1 if must_change_password else 0),
+            """INSERT INTO users (username, password_hash, role, is_active, must_change_password, org_id, person_kind)
+               VALUES (?, ?, ?, 1, ?, ?, ?)""",
+            (
+                normalize_username(username),
+                pw_hash,
+                normalized_role,
+                1 if must_change_password else 0,
+                oid,
+                pk,
+            ),
         )
         uid = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
         conn.commit()

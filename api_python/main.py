@@ -335,6 +335,65 @@ async def list_projects(request: Request, user: dict = Depends(auth.require_api_
     return response.json_success(request, {"projects": projects, "count": len(projects)})
 
 
+@app.get("/api/list-organizations.php")
+async def list_organizations_route(request: Request, user: dict = Depends(auth.require_api_user)):
+    from . import logic
+
+    full = logic.users.get_user_by_id(int(user["id"]), False)
+    if not full:
+        payload, _ = response.api_error("auth.invalid_user", "User not found", 401)
+        raise HTTPException(status_code=401, detail=payload)
+    orgs = logic.workspace.list_organizations(
+        user_role=str(full.get("role", "member")),
+        org_id=full.get("org_id"),
+    )
+    return response.json_success(request, {"organizations": orgs, "count": len(orgs)})
+
+
+@app.get("/api/list-directory-projects.php")
+async def list_directory_projects_route(
+    request: Request, user: dict = Depends(auth.require_api_user), limit: int = 200
+):
+    from . import logic
+
+    full = logic.users.get_user_by_id(int(user["id"]), False)
+    if not full:
+        payload, _ = response.api_error("auth.invalid_user", "User not found", 401)
+        raise HTTPException(status_code=401, detail=payload)
+    projects = logic.workspace.list_directory_projects_for_user(full, limit)
+    return response.json_success(request, {"projects": projects, "count": len(projects)})
+
+
+@app.post("/api/create-directory-project.php")
+async def create_directory_project_route(request: Request, user: dict = Depends(auth.require_api_user)):
+    from . import logic
+
+    body = await _read_json_body(request)
+    if body is None:
+        payload, _ = response.api_error("validation.invalid_json", "Invalid JSON body", 400)
+        raise HTTPException(status_code=400, detail=payload)
+    body = body or {}
+    name = str(body.get("name", "")).strip()
+    description = body.get("description")
+    description_s = str(description).strip() if description is not None else None
+    if description_s == "":
+        description_s = None
+    client_visible = bool(body.get("client_visible", False))
+    all_access = bool(body.get("all_access", False))
+    res = logic.workspace.create_directory_project(
+        int(user["id"]),
+        name,
+        description_s,
+        client_visible,
+        all_access,
+    )
+    if not res.get("success"):
+        payload, _ = response.api_error("project.create_failed", res.get("error", "Create failed"), 400)
+        raise HTTPException(status_code=400, detail=payload)
+    proj = logic.workspace.get_directory_project_by_id(int(res["id"]))
+    return response.json_success(request, {"project": proj}, status_code=201)
+
+
 @app.get("/api/list-tags.php")
 async def list_tags(request: Request, user: dict = Depends(auth.require_api_user), limit: int = 200):
     from . import logic
@@ -567,7 +626,12 @@ async def create_user_route(request: Request, user: dict = Depends(auth.require_
         must_change_password = False
     create_api_key = bool(body.get("create_api_key", False))
     api_key_name = str(body.get("api_key_name", "default")).strip()
-    result = logic.users_logic.create_user(username, password, role, must_change_password)
+    _raw_oid = body.get("org_id")
+    org_id = int(_raw_oid) if _raw_oid is not None and str(_raw_oid).strip() != "" else None
+    person_kind = str(body.get("person_kind", "team_member")).strip()
+    result = logic.users_logic.create_user(
+        username, password, role, must_change_password, org_id, person_kind
+    )
     if not result.get("success"):
         payload, _ = response.api_error("user.create_failed", result.get("error", "Create user failed"), 400)
         raise HTTPException(status_code=400, detail=payload)
