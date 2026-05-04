@@ -9,6 +9,7 @@ db/*.sqlite3
 # Local secrets (persist on server under db/, but never commit)
 db/api_key.txt
 db/bootstrap_admin_password.txt
+db/otto_agent_api_key.env
 db/secrets.php
 public/includes/secrets.php
 
