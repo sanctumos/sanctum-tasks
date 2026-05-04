@@ -29,11 +29,8 @@ $pageTitle = isset($pageTitle) ? $pageTitle : 'Sanctum Tasks';
                     <a class="btn btn-outline-light text-center text-lg-start" href="/admin/workspace-projects.php"><i class="bi bi-kanban me-1"></i>Projects</a>
                     <?php if (isAdminRole((string)($_SESSION['role'] ?? ''))): ?>
                         <a class="btn btn-outline-light text-center text-lg-start" href="/admin/users.php"><i class="bi bi-people me-1"></i>Users</a>
-                        <a class="btn btn-outline-light text-center text-lg-start" href="/admin/audit.php"><i class="bi bi-shield-check me-1"></i>Audit</a>
-                        <a class="btn btn-outline-light text-center text-lg-start" href="/admin/api-keys.php"><i class="bi bi-key me-1"></i>API keys</a>
                     <?php endif; ?>
-                    <a class="btn btn-outline-light text-center text-lg-start" href="/admin/mfa.php"><i class="bi bi-shield-lock me-1"></i>MFA</a>
-                    <a class="btn btn-outline-light text-center text-lg-start" href="/admin/change-password.php"><i class="bi bi-asterisk me-1"></i>Password</a>
+                    <a class="btn btn-outline-light text-center text-lg-start" href="/admin/settings.php"><i class="bi bi-gear me-1"></i>Settings</a>
                     <hr class="d-lg-none border-secondary opacity-50 my-1 mx-0 w-100">
                     <span class="navbar-text text-white-50 small px-lg-2 py-1 text-center text-lg-start"><i class="bi bi-person-circle me-1"></i><?= htmlspecialchars($_SESSION['username'] ?? '') ?></span>
                     <form method="post" action="/admin/logout.php" class="m-0">

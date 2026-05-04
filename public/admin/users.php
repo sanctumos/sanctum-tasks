@@ -82,7 +82,7 @@ require __DIR__ . '/_layout_top.php';
         <div class="subtitle"><?= count($users) ?> in this workspace</div>
     </div>
     <div class="page-header__actions">
-        <a class="btn btn-sm btn-outline-secondary" href="/admin/audit.php"><i class="bi bi-shield-check me-1"></i>Audit log</a>
+        <a class="btn btn-sm btn-outline-secondary" href="/admin/settings.php?tab=audit"><i class="bi bi-shield-check me-1"></i>Audit log</a>
         <button class="btn btn-sm btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#newUserModal"><i class="bi bi-person-plus me-1"></i>New user</button>
     </div>
 </div>
