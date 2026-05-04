@@ -27,6 +27,14 @@ These are the canonical destinations behind the Google Share redirects (fetchabl
 
 **Official help articles** to ground naming and workflows (non-exhaustive): [Projects](https://3.basecamp-help.com/article/25-projects), [Teams and HQ](https://3.basecamp-help.com/article/686-teams-and-hq), [Clients in projects](https://3.basecamp-help.com/article/689-clients-in-projects). Third-party posts are **secondary**; they reinforce onboarding patterns and vocabulary—they are not the source of truth for behavior.
 
+### 2.1 Research seed from Mark’s links (reviewed, not just bookmarked)
+
+Mark supplied these as **initial research seed** (resolved targets under §2). Plain `curl` works for Everhour, Arcstone, and Basecamp Help; **unito.io** returned Cloudflare **403** from this egress and was fetched via **FlareSolverr** on NewDev per workspace rules, then parsed for article text.
+
+**Cross-cutting themes:** home stack **HQ → Teams → Projects**; persistent global nav (**Hey!** notifications, **Pings**, **Activity**, search); **projects** as the place cross-functional work and **clients** meet; per-space **Campfire** chat; **to-do lists** with assignees (often multiple), comments, files; **message boards** for durable announcements; **schedules**; **automatic check-ins**; **docs & files** with version history. Everhour’s long guide adds “pro” habits (integrations, **Clientside**, toolbox toggles, bookmarks, timeline, reports, notification hygiene)—useful for UX prioritization later, not schema truth.
+
+**Sanctum mapping:** Our plan already prioritizes **organizations + person_kind + projects + membership + tasks under projects** before reproducing chat, boards, or check-ins. Third-party articles **confirm** that ordering; they do **not** replace §8 decisions or official Help for behavior.
+
 ---
 
 ## 3. Basecamp 3 — minimal conceptual stack (what we are borrowing)
