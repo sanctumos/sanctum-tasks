@@ -124,6 +124,8 @@ Bootstrap credentials/key are created at first run:
 
 ## Documentation index
 
+- Basecamp-shaped roadmap (domain-first, post–UI experiment rollback): [docs/BASECAMP3_DOMAIN_PLAN.md](docs/BASECAMP3_DOMAIN_PLAN.md)
+- Earlier overlay + gap analysis (still useful for surface inventory): [docs/BASECAMP3_UX_OVERLAY_PLAN.md](docs/BASECAMP3_UX_OVERLAY_PLAN.md)
 - API: [docs/api.md](docs/api.md)
 - Development, schema/migrations, backups, CI/testing: [docs/development.md](docs/development.md)
 - Integration walkthrough (admin -> API key -> SDK/plugin): [docs/integrations.md](docs/integrations.md)

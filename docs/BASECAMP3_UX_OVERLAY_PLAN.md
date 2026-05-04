@@ -4,6 +4,8 @@
 **Author:** Otto (planning doc; CC BY-SA 4.0 per repo `LICENSE-DOCS`)  
 **Date:** 2026-05-02  
 
+> **2026-05-04 update:** Net-new Basecamp-shaped work should follow **[BASECAMP3_DOMAIN_PLAN.md](BASECAMP3_DOMAIN_PLAN.md)** (domain-first phases). The BC UI experiment was rolled back on `main`; **§6–7 milestones below are overlay-first**—keep §2–5 gap analysis and references, but use the domain plan for implementation sequencing.
+
 This document satisfies three requests: (1) inventory and sync state for Sanctum OS repositories in this workspace, (2) a structured survey of **Basecamp 3** product surfaces and API concepts, (3) a gap analysis between **Sanctum Tasks** data and that archetype, plus a phased plan for an **optional, user-toggleable UI/UX overlay** without abandoning the current bare-bones admin.
 
 ---
