@@ -66,7 +66,7 @@ Phases are **ordered by dependency**. UI milestones come **after** Phase 2 minim
 **Output (deliverable):**
 
 - ERD sketch (Markdown + diagram optional): entities, FKs, uniqueness rules.
-- Decision log: single-tenant vs multi-org in one DB; how **client** maps to Sanctum `users.role` vs new columns/tables.
+- Decision log: aligns with **§8** (resolved defaults); migration/backfill notes for `tasks.project` strings.
 - Migration compatibility: how existing deployments upgrade without orphaning `tasks.project` strings.
 
 **Exit criterion:** Signed-off schema sketch before Phase 1 DDL.
@@ -76,15 +76,15 @@ Phases are **ordered by dependency**. UI milestones come **after** Phase 2 minim
 Introduce **account boundary** appropriate to Sanctum (may map to a single `organizations` row for small installs):
 
 - `organizations` (or `accounts`) — id, name, settings JSON.
-- Extend **`users`** (or add profiles): link to org; **`person_kind`** enum `team_member` | `client` (names TBD); constraints aligned with Basecamp rule that a person is one kind account-wide.
-- Optional: **`client_companies`** if clients belong to named companies you bill or report on.
+- Extend **`users`**: link to org; **`person_kind`** enum `team_member` \| `client` (distinct from **`role`**, which stays admin/manager/member/api as today). Basecamp rule: one kind per person account-wide.
+- **No** `client_companies` and **no** billing/invoice entities here — flat clients only; billing stays outside PM.
 
 Idempotent migrations under `tools/migrations/` per repo conventions; SQLite `IF NOT EXISTS` / guarded `ALTER`.
 
 ### Phase 2 — Projects as entities
 
 - **`projects`** — id, org_id, name, description, status (`active` | `archived` | `trashed`), flags for **client project** / **all-access** if we mirror BC semantics, timestamps.
-- **`project_members`** — project_id, user_id, role (`admin` | `member` | `client_access` … TBD).
+- **`project_members`** — project_id, user_id, role (`lead` \| `member` \| `client`). Exact permission matrix TBD in Phase 3; start minimal (e.g. clients read-heavy unless elevated).
 - **Task linkage:** `tasks.project_id` nullable FK; **backfill** from `tasks.project` string via normalized match; keep legacy column deprecated until removal in a later major.
 
 API and Python mirror: CRUD projects, list directory with filters, assign task to `project_id`.
@@ -129,14 +129,33 @@ That document’s **§2–5** (surface survey + gap analysis) and **§8 referenc
 
 ---
 
-## 8. Open items (need Mark / seed data)
+## 8. Product decisions (locked) and implementation defaults
 
-- Exact **multi-tenant** expectation (one SQLite DB per org vs shared tables with `org_id`).
-- Whether **clients** log into the same Sanctum Tasks admin or a narrower portal later.
-- Priority order among **Phase 4** tools after to-dos/lists.
+### 8.1 Locked by Mark
+
+| Topic | Decision |
+|-------|-----------|
+| **Team vs client** | Use **`person_kind`** on `users` (`team_member` \| `client`), separate from **`role`**. |
+| **Client shape** | **Flat clients only** — no nested “client company” org chart in this product. |
+| **Billing** | **Not in scope** for Sanctum Tasks — no subscription/invoicing artifacts in schema. |
+| **Everything else** | Engineering may apply judgment on detail (below); escalate only when trade-offs affect UX promises. |
+
+### 8.2 Defaults (implementation judgment — revise if Mark contradicts)
+
+| Topic | Default |
+|-------|---------|
+| **Tenancy** | One SQLite database file per deployment; **`organizations`** table + **`org_id`** on scoped rows. Single-org installs use one org row; multi-org later is additive without DB-per-tenant. |
+| **Client login surface** | Same web app and session auth as today (**`/admin/`**) for MVP; a narrower **client portal** is optional later, not required for Phase 1–3. |
+| **Phase 4 ordering** | After **to-do lists**: **schedule-style aggregation** (due dates / calendar views from existing fields) → **Doors** (external URLs on projects) → **message board / realtime chat** stays deferred unless scoped. |
+| **`tasks.project` migration** | Add **`project_id`**; backfill by **normalized string match** against `projects.name`; unmatched strings stay on legacy column until fixed in admin or a small remap table/import pass. |
+| **Visibility MVP** | **`person_kind` + `project_members`** + flags on **`projects`** (e.g. internal vs client-visible); refine when seed scenarios arrive. |
 
 ---
 
 ## 9. Next engineering action
 
-Await **seed dataset + decisions on §8**, then implement **Phase 1 migration + read APIs** before any new BC-themed PHP layout ships on `main`.
+**Policy:** §8 closed enough to draft DDL and APIs.
+
+**Still useful from Mark:** **seed data** (or a thin fixture) so Phase 0 ERD matches real names and counts — not blocking judgment calls above.
+
+Implement **Phase 1 migration + read/list APIs**, then **Phase 2 projects + `project_id`**, before any new BC-themed PHP layout ships on `main`.
