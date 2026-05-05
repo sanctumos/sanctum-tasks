@@ -435,9 +435,25 @@ function listOrganizationMembershipIdsForUser(int $userId): array {
 /**
  * Organizations this user may access in the directory (single org for members; many for admin/manager).
  *
+ * **Admin** always receives every organization id so workspace/project counts and listings are global.
+ * (Membership rows alone can omit orgs where projects exist — that hid directory projects from admins.)
+ *
  * @return int[]
  */
 function listOrganizationIdsForUserAccess(array $userRow): array {
+    if ((string)($userRow['role'] ?? '') === 'admin') {
+        $db = getDbConnection();
+        if (!tableExists($db, 'organizations')) {
+            return [];
+        }
+        $res = $db->query('SELECT id FROM organizations ORDER BY id ASC');
+        $all = [];
+        while ($row = $res->fetchArray(SQLITE3_ASSOC)) {
+            $all[] = (int)$row['id'];
+        }
+        return $all;
+    }
+
     $primary = isset($userRow['org_id']) ? (int)$userRow['org_id'] : 0;
     if (!userQualifiesForMultiOrganizationMemberships($userRow)) {
         return $primary > 0 ? [$primary] : [];
@@ -466,6 +482,9 @@ function listOrganizationIdsForUserAccess(array $userRow): array {
 function userMayAccessOrganization(array $userRow, int $orgId): bool {
     if ($orgId <= 0) {
         return false;
+    }
+    if ((string)($userRow['role'] ?? '') === 'admin' && getOrganizationById($orgId)) {
+        return true;
     }
     foreach (listOrganizationIdsForUserAccess($userRow) as $oid) {
         if ($oid === $orgId) {
@@ -1858,6 +1877,32 @@ function listAllDirectoryProjectsInOrganization(int $orgId, int $limit = 500): a
         $items[] = $row;
     }
     return $items;
+}
+
+/**
+ * Legacy `tasks.project` text buckets with no directory link (`project_id` null).
+ * For admin UX: API/automation often fills `project` without creating a `projects` row.
+ *
+ * @return array<int, array{namespace: string, task_count: int}>
+ */
+function listLegacyOnlyTaskProjectNamespaces(): array {
+    $db = getDbConnection();
+    $stmt = $db->prepare("
+        SELECT TRIM(project) AS ns, COUNT(*) AS c
+        FROM tasks
+        WHERE project_id IS NULL AND project IS NOT NULL AND TRIM(project) <> ''
+        GROUP BY LOWER(TRIM(project))
+        ORDER BY ns COLLATE NOCASE
+    ");
+    $res = $stmt->execute();
+    $out = [];
+    while ($row = $res->fetchArray(SQLITE3_ASSOC)) {
+        $out[] = [
+            'namespace' => (string)$row['ns'],
+            'task_count' => (int)$row['c'],
+        ];
+    }
+    return $out;
 }
 
 function listOrganizationsWithStats(): array {

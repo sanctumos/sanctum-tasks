@@ -96,6 +96,26 @@ require __DIR__ . '/_layout_top.php';
     </table>
 </div>
 
+<?php $legacyNs = listLegacyOnlyTaskProjectNamespaces(); ?>
+<div class="surface surface-pad mb-4">
+    <h2 class="h6 mb-2"><i class="bi bi-info-circle me-1"></i>How project counts work</h2>
+    <p class="small text-muted mb-2 mb-md-3">
+        The <strong>Projects</strong> column counts rows in the <strong>directory</strong> table (<code>projects</code>) for that organization — not legacy task labels.
+        Tasks created via API with only a <code>project</code> text (e.g. <code>invoicing</code>) and no <code>project_id</code> do <strong>not</strong> increase this count until you create a workspace project and link tasks.
+        Organization names and directory project names can differ (e.g. a project may live under org “Default” while another org row exists with a similar label).
+    </p>
+    <?php if ($legacyNs !== []): ?>
+        <div class="small"><strong>Legacy-only namespaces</strong> (tasks not linked to a workspace project):</div>
+        <ul class="small mb-0 mt-1">
+            <?php foreach ($legacyNs as $ns): ?>
+                <li><code><?= htmlspecialchars($ns['namespace']) ?></code> — <?= (int)$ns['task_count'] ?> task(s)</li>
+            <?php endforeach; ?>
+        </ul>
+    <?php else: ?>
+        <p class="small text-muted mb-0">No legacy-only project namespaces (all tasks use <code>project_id</code> or blank).</p>
+    <?php endif; ?>
+</div>
+
 <div class="surface surface-pad fine-print mb-5">
     <p class="mb-2"><strong>How tenancy works:</strong></p>
     <ul class="mb-0 small">
