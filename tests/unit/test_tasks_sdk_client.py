@@ -129,6 +129,7 @@ def test_create_task_includes_new_metadata_fields(client: TasksClient, monkeypat
         due_at="2026-03-05T10:00:00Z",
         priority="high",
         project="Platform",
+        project_id=7,
         tags=["incident", "platform"],
         rank=10,
         recurrence_rule="FREQ=WEEKLY;BYDAY=MO",
@@ -139,6 +140,7 @@ def test_create_task_includes_new_metadata_fields(client: TasksClient, monkeypat
     assert captured["endpoint"] == "create-task.php"
     assert captured["data"]["priority"] == "high"
     assert captured["data"]["project"] == "Platform"
+    assert captured["data"]["project_id"] == 7
     assert captured["data"]["tags"] == ["incident", "platform"]
     assert captured["data"]["rank"] == 10
     assert captured["data"]["recurrence_rule"] == "FREQ=WEEKLY;BYDAY=MO"

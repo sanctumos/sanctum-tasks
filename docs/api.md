@@ -146,13 +146,14 @@ Convenience fields:
 | `status` | No | Defaults to default workflow status |
 | `assigned_to_user_id` | No | |
 | `body` | No | |
-| `due_at`, `priority`, `project`, `project_id`, `list_id`, `tags`, `rank`, `recurrence_rule` | No | |
+| `project_id` | **Yes** | Directory / workspace `projects.id` the task belongs to. You may instead send **`list_id`** (a to-do list inside a project) and the task inherits that project. |
+| `due_at`, `priority`, `project`, `list_id`, `tags`, `rank`, `recurrence_rule` | No | `project` is a legacy display string; new tasks should rely on `project_id`. |
 
 **Response:** `201` with created task payload (`task`).
 
 #### `POST /api/update-task.php`
 
-**Body:** `id` (required), plus any writable task fields.
+**Body:** `id` (required), plus any writable task fields. You cannot clear **`project_id`** (sending `null` / empty is rejected); link the task to another directory project by passing a new id.
 
 #### `POST /api/delete-task.php`
 
@@ -178,11 +179,11 @@ Maximum **100** items per request for both endpoints. Larger batches return **`4
     {
       "title": "…",
       "status": "todo",
+      "project_id": 1,
       "assigned_to_user_id": null,
       "body": null,
       "due_at": null,
       "priority": "normal",
-      "project": null,
       "tags": [],
       "rank": 0,
       "recurrence_rule": null
@@ -351,8 +352,8 @@ See `list-todo-lists.php`, `create-todo-list.php`, `list-project-pins.php`, `set
 
 ### Tasks ↔ directory project
 
-- `POST /api/create-task.php` — optional `project_id`, `list_id`
-- `POST /api/update-task.php` — optional `project_id`, `list_id`
+- `POST /api/create-task.php` — required **`project_id`** (or **`list_id`** that resolves to a project); optional other fields
+- `POST /api/update-task.php` — **`project_id`** cannot be cleared once set; optional `list_id` when consistent with the task’s project
 - `GET /api/list-tasks.php` — filter `project_id`, `list_id`
 
 ---

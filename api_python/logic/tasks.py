@@ -377,6 +377,12 @@ def create_task(
             project_fk = lpid
             project = str(p_row["name"])
 
+    if not project_fk or int(project_fk) <= 0:
+        return {
+            "success": False,
+            "error": "A directory project is required. Pass project_id (or list_id for a list in a project).",
+        }
+
     conn = db.get_connection()
     conn.execute(
         """INSERT INTO tasks (title, body, status, due_at, priority, project, project_id, list_id, tags_json, rank, recurrence_rule, created_by_user_id, assigned_to_user_id, created_at, updated_at)
@@ -469,11 +475,12 @@ def update_task(task_id: int, fields: dict) -> dict:
     if "project_id" in fields:
         v = fields["project_id"]
         if v is None or v == "":
-            sets.append("project_id = ?")
-            params.append(None)
-        else:
-            sets.append("project_id = ?")
-            params.append(int(v))
+            return {
+                "success": False,
+                "error": "project_id cannot be cleared; every task must belong to a directory project.",
+            }
+        sets.append("project_id = ?")
+        params.append(int(v))
 
     if "list_id" in fields:
         v = fields["list_id"]

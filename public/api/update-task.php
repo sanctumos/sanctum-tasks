@@ -28,16 +28,16 @@ if (array_key_exists('project', $body)) {
     $fields['project'] = $body['project'];
 }
 if (array_key_exists('project_id', $body)) {
-    $resP = resolveTaskDirectoryProjectId($user, $body['project_id'] ?? null, true);
+    $rawPid = $body['project_id'];
+    if ($rawPid === null || $rawPid === '' || (is_string($rawPid) && trim($rawPid) === '')) {
+        apiError('validation.project_id', 'project_id cannot be removed; every task must belong to a directory project.', 400);
+    }
+    $resP = resolveTaskDirectoryProjectId($user, $rawPid, false);
     if (!$resP['success']) {
         apiError('validation.project_id', $resP['error'] ?? 'Invalid project_id', 400);
     }
     $fields['project_id'] = $resP['project_id'];
-    if ($resP['project_id'] === null) {
-        $fields['project'] = null;
-    } else {
-        $fields['project'] = $resP['project'];
-    }
+    $fields['project'] = $resP['project'];
 }
 if (array_key_exists('list_id', $body)) {
     $lid = $body['list_id'];

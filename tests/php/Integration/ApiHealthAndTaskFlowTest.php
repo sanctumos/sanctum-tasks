@@ -47,11 +47,20 @@ final class ApiHealthAndTaskFlowTest extends TestCase
             'headers' => ['X-API-Key' => $this->server->apiKey],
         ]);
 
+        $p = $c->post('/api/create-directory-project.php', [
+            'headers' => ['Content-Type' => 'application/json', 'X-API-Key' => $this->server->apiKey],
+            'body' => json_encode(['name' => 'Integration test project', 'all_access' => true], JSON_THROW_ON_ERROR),
+        ]);
+        $this->assertSame(201, $p->getStatusCode(), (string)$p->getBody());
+        $projId = (int) (json_decode((string)$p->getBody(), true)['data']['project']['id'] ?? 0);
+        $this->assertGreaterThan(0, $projId);
+
         $create = $c->post('/api/create-task.php', [
             'headers' => ['Content-Type' => 'application/json'],
             'body' => json_encode([
                 'title' => 'Integration task',
                 'status' => 'todo',
+                'project_id' => $projId,
             ], JSON_THROW_ON_ERROR),
         ]);
         $this->assertSame(201, $create->getStatusCode(), (string)$create->getBody());

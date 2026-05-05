@@ -192,15 +192,20 @@ async def update_task(request: Request, user: dict = Depends(auth.require_api_us
         payload, _ = response.api_error("auth.invalid_user", "User not found", 401)
         raise HTTPException(status_code=401, detail=payload)
     if "project_id" in body:
-        res_p = logic.workspace.resolve_task_directory_project_id(full_user, body.get("project_id"), True)
+        raw_pid = body.get("project_id")
+        if raw_pid is None or raw_pid == "" or (isinstance(raw_pid, str) and str(raw_pid).strip() == ""):
+            payload, _ = response.api_error(
+                "validation.project_id",
+                "project_id cannot be removed; every task must belong to a directory project.",
+                400,
+            )
+            raise HTTPException(status_code=400, detail=payload)
+        res_p = logic.workspace.resolve_task_directory_project_id(full_user, raw_pid, False)
         if not res_p.get("success"):
             payload, _ = response.api_error("validation.project_id", res_p.get("error", "Invalid project_id"), 400)
             raise HTTPException(status_code=400, detail=payload)
         fields["project_id"] = res_p.get("project_id")
-        if res_p.get("project_id") is None:
-            fields["project"] = None
-        else:
-            fields["project"] = res_p.get("project")
+        fields["project"] = res_p.get("project")
     if "list_id" in body:
         lid = body.get("list_id")
         if lid is None or lid == "":

@@ -1264,6 +1264,10 @@ function createTask($title, $status, $createdByUserId, $assignedToUserId = null,
         }
     }
 
+    if ($projectFk === null || (int)$projectFk <= 0) {
+        return ['success' => false, 'error' => 'A directory project is required. Provide project_id or list_id for a list inside a project.'];
+    }
+
     $db = getDbConnection();
     $stmt = $db->prepare("
         INSERT INTO tasks
@@ -1672,12 +1676,10 @@ function updateTask($id, $fields = []): array {
     if (array_key_exists('project_id', $fields)) {
         $pidRaw = $fields['project_id'];
         if ($pidRaw === null || $pidRaw === '') {
-            $sets[] = 'project_id = :project_id';
-            $params[':project_id'] = [null, SQLITE3_NULL];
-        } else {
-            $sets[] = 'project_id = :project_id';
-            $params[':project_id'] = [(int)$pidRaw, SQLITE3_INTEGER];
+            return ['success' => false, 'error' => 'project_id cannot be cleared; every task must belong to a directory project.'];
         }
+        $sets[] = 'project_id = :project_id';
+        $params[':project_id'] = [(int)$pidRaw, SQLITE3_INTEGER];
     }
 
     if (array_key_exists('list_id', $fields)) {
@@ -2801,6 +2803,8 @@ function bulkCreateTasks(array $items, int $createdByUserId): array {
                 'due_at' => $item['due_at'] ?? null,
                 'priority' => $item['priority'] ?? 'normal',
                 'project' => $item['project'] ?? null,
+                'project_id' => $item['project_id'] ?? null,
+                'list_id' => $item['list_id'] ?? null,
                 'tags' => $item['tags'] ?? [],
                 'rank' => $item['rank'] ?? 0,
                 'recurrence_rule' => $item['recurrence_rule'] ?? null,

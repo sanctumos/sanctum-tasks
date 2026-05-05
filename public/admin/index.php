@@ -86,9 +86,13 @@ function st_render_task_assignee_html(array $t): string {
             <button type="button" class="btn btn-sm btn-outline-secondary <?= $initialView === 'board' ? 'active' : '' ?>" data-view-switch="board"><i class="bi bi-kanban me-1"></i>Board</button>
             <button type="button" class="btn btn-sm btn-outline-secondary <?= $initialView === 'list' ? 'active' : '' ?>" data-view-switch="list"><i class="bi bi-list-ul me-1"></i>List</button>
         </div>
-        <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#newTaskModal">
-            <i class="bi bi-plus-lg"></i> New task
-        </button>
+        <?php if (!empty($directoryProjects)): ?>
+            <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#newTaskModal">
+                <i class="bi bi-plus-lg"></i> New task
+            </button>
+        <?php else: ?>
+            <a class="btn btn-outline-primary btn-sm" href="/admin/workspace-projects.php"><i class="bi bi-kanban me-1"></i>Create a project first</a>
+        <?php endif; ?>
     </div>
 </div>
 
@@ -356,7 +360,8 @@ function st_render_task_assignee_html(array $t): string {
 
 </div>
 
-<?php /* ------- New task modal ------- */ ?>
+<?php /* ------- New task modal (requires a directory project) ------- */ ?>
+<?php if (!empty($directoryProjects)): ?>
 <div class="modal fade" id="newTaskModal" tabindex="-1" aria-labelledby="newTaskModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg modal-dialog-centered">
         <div class="modal-content">
@@ -397,9 +402,15 @@ function st_render_task_assignee_html(array $t): string {
                                 <?php endforeach; ?>
                             </select>
                         </div>
-                        <div class="col-12 col-md-6">
+                        <div class="col-12">
                             <label class="form-label">Project</label>
-                            <input class="form-control" name="project" list="projects-list" placeholder="e.g. Sanctum Platform">
+                            <select class="form-select" name="project_id" required>
+                                <option value="" selected disabled>Select a project…</option>
+                                <?php foreach ($directoryProjects as $dp): ?>
+                                    <option value="<?= (int)$dp['id'] ?>"><?= htmlspecialchars($dp['name']) ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                            <div class="form-text">Tasks must belong to a workspace project.</div>
                         </div>
                         <div class="col-12 col-md-6">
                             <label class="form-label">Due (UTC)</label>
@@ -423,6 +434,7 @@ function st_render_task_assignee_html(array $t): string {
         </div>
     </div>
 </div>
+<?php endif; ?>
 
 <script>
 // View switcher: hide/show board vs list based on data-view-root

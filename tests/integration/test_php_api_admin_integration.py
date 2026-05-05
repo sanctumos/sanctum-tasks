@@ -26,6 +26,20 @@ def _auth_headers(api_key: str) -> dict:
     }
 
 
+def _create_directory_project(base_url: str, api_key: str, name: str) -> int:
+    r = requests.post(
+        _api_url(base_url, "/api/create-directory-project.php"),
+        headers=_auth_headers(api_key),
+        json={"name": name, "all_access": True},
+        timeout=5,
+    )
+    assert r.status_code == 201, r.text
+    j = r.json()
+    proj = (j.get("data") or {}).get("project") or j.get("project")
+    assert proj and proj.get("id")
+    return int(proj["id"])
+
+
 def _totp(secret: str, epoch: float | None = None) -> str:
     cleaned = re.sub(r"[^A-Z2-7]", "", secret.upper())
     padding = "=" * ((8 - len(cleaned) % 8) % 8)
@@ -114,12 +128,14 @@ def test_task_crud_search_sort_and_collaboration_endpoints(php_server):
     headers = _auth_headers(php_server.api_key)
     token = uuid.uuid4().hex[:8]
 
+    proj_id = _create_directory_project(base_url, php_server.api_key, f"Platform-{token}")
+
     create_payload = {
         "title": f"Investigate deploy error {token}",
         "body": "Check release logs",
         "status": "todo",
         "priority": "high",
-        "project": f"Platform-{token}",
+        "project_id": proj_id,
         "tags": ["deploy", "infra"],
         "due_at": "2026-03-01T12:30:00Z",
         "rank": 10,
@@ -135,7 +151,7 @@ def test_task_crud_search_sort_and_collaboration_endpoints(php_server):
     created = create_resp.json()["task"]
     task_id = int(created["id"])
     assert created["priority"] == "high"
-    assert created["project"].startswith("Platform-")
+    assert int(created.get("project_id") or 0) == proj_id
     assert created["tags"] == ["deploy", "infra"]
     assert created["recurrence_rule"] == "FREQ=WEEKLY;BYDAY=MO"
     assert created["due_at"].startswith("2026-03-01")
@@ -192,7 +208,7 @@ def test_task_crud_search_sort_and_collaboration_endpoints(php_server):
         headers=headers,
         params={
             "q": "deploy",
-            "project": created["project"],
+            "project_id": proj_id,
             "priority": "high",
             "sort_by": "rank",
             "sort_dir": "DESC",
@@ -321,6 +337,8 @@ def test_task_count_fields_are_exact_with_multiple_related_rows(php_server):
     headers = _auth_headers(php_server.api_key)
     token = uuid.uuid4().hex[:8]
 
+    proj_id = _create_directory_project(base_url, php_server.api_key, f"Counts-{token}")
+
     create_resp = requests.post(
         _api_url(base_url, "/api/create-task.php"),
         headers=headers,
@@ -329,7 +347,7 @@ def test_task_count_fields_are_exact_with_multiple_related_rows(php_server):
             "body": "Verify count fields",
             "status": "todo",
             "priority": "normal",
-            "project": f"Counts-{token}",
+            "project_id": proj_id,
         },
         timeout=5,
     )
@@ -396,7 +414,7 @@ def test_task_count_fields_are_exact_with_multiple_related_rows(php_server):
     list_resp = requests.get(
         _api_url(base_url, "/api/list-tasks.php"),
         headers=headers,
-        params={"project": f"Counts-{token}", "q": token, "limit": 20},
+        params={"project_id": proj_id, "q": token, "limit": 20},
         timeout=5,
     )
     assert list_resp.status_code == 200
@@ -428,6 +446,8 @@ def test_search_pagination_preserves_filters_and_uses_trusted_origin(php_server)
     headers = _auth_headers(php_server.api_key)
     token = uuid.uuid4().hex[:8]
 
+    proj_id = _create_directory_project(base_url, php_server.api_key, f"Pag-{token}")
+
     for idx in range(3):
         create_resp = requests.post(
             _api_url(base_url, "/api/create-task.php"),
@@ -437,6 +457,7 @@ def test_search_pagination_preserves_filters_and_uses_trusted_origin(php_server)
                 "status": "todo",
                 "priority": "high",
                 "assigned_to_user_id": 1,
+                "project_id": proj_id,
             },
             timeout=5,
         )
@@ -499,13 +520,15 @@ def test_bulk_status_user_and_api_key_lifecycle_endpoints(php_server):
     assert statuses_resp.status_code == 200
     assert any(s["slug"].startswith("blocked-") for s in statuses_resp.json()["statuses"])
 
+    bulk_proj_id = _create_directory_project(base_url, php_server.api_key, f"Bulk-{suffix}")
+
     bulk_create = requests.post(
         _api_url(base_url, "/api/bulk-create-tasks.php"),
         headers=headers,
         json={
             "tasks": [
-                {"title": f"Bulk task one {suffix}", "status": "todo", "project": "Bulk"},
-                {"title": f"Bulk task two {suffix}", "status": "doing", "project": "Bulk"},
+                {"title": f"Bulk task one {suffix}", "status": "todo", "project_id": bulk_proj_id},
+                {"title": f"Bulk task two {suffix}", "status": "doing", "project_id": bulk_proj_id},
             ]
         },
         timeout=5,

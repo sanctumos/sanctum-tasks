@@ -18,7 +18,17 @@ final class DbTaskLifecycleTest extends TestCase
         $this->assertTrue($user['success'], (string)($user['error'] ?? 'create user'));
         $uid = (int)$user['id'];
 
-        $task = createTask("Unit task {$suffix}", 'todo', $uid, null, 'Body text', ['priority' => 'normal']);
+        $proj = createDirectoryProject($uid, "Proj {$suffix}", null, false, true);
+        $this->assertTrue($proj['success'], (string)($proj['error'] ?? 'create project'));
+        $pid = (int)$proj['id'];
+
+        $noProj = createTask("Orphan {$suffix}", 'todo', $uid, null, 'Body text', ['priority' => 'normal']);
+        $this->assertFalse($noProj['success'], 'create without project_id should fail');
+
+        $task = createTask("Unit task {$suffix}", 'todo', $uid, null, 'Body text', [
+            'priority' => 'normal',
+            'project_id' => $pid,
+        ]);
         $this->assertTrue($task['success'], (string)($task['error'] ?? 'create task'));
         $tid = (int)$task['id'];
 
@@ -26,5 +36,6 @@ final class DbTaskLifecycleTest extends TestCase
         $this->assertNotNull($loaded);
         $this->assertSame("Unit task {$suffix}", $loaded['title']);
         $this->assertSame('todo', $loaded['status']);
+        $this->assertSame($pid, (int)($loaded['project_id'] ?? 0));
     }
 }

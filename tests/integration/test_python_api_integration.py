@@ -13,6 +13,20 @@ def _auth_headers(api_key: str) -> dict:
     return {"X-API-Key": api_key, "Content-Type": "application/json"}
 
 
+def _create_directory_project(client, headers, name: str) -> int:
+    r = client.post(
+        "/api/create-directory-project.php",
+        headers=headers,
+        json={"name": name, "all_access": True},
+    )
+    assert r.status_code == 201, r.text
+    j = r.json()
+    data = j.get("data") or j
+    proj = data.get("project") or j.get("project")
+    assert proj and proj.get("id")
+    return int(proj["id"])
+
+
 def test_python_health_requires_auth_and_emits_rate_headers(python_api_app):
     client = python_api_app.client
     api_key = python_api_app.api_key
@@ -35,11 +49,12 @@ def test_python_health_requires_auth_and_emits_rate_headers(python_api_app):
 def test_python_task_crud_and_list(python_api_app):
     client = python_api_app.client
     headers = _auth_headers(python_api_app.api_key)
+    pid = _create_directory_project(client, headers, "Python API test project")
 
     create_resp = client.post(
         "/api/create-task.php",
         headers=headers,
-        json={"title": "Python API test task", "status": "todo", "priority": "normal"},
+        json={"title": "Python API test task", "status": "todo", "priority": "normal", "project_id": pid},
     )
     assert create_resp.status_code == 201
     created = create_resp.json().get("data") or create_resp.json()
@@ -119,6 +134,7 @@ def test_python_session_login_and_me(python_api_app):
 def test_python_search_tasks_bulk_create_update(python_api_app):
     client = python_api_app.client
     headers = _auth_headers(python_api_app.api_key)
+    pid = _create_directory_project(client, headers, "Python bulk project")
     # search
     r = client.get("/api/search-tasks.php", headers=headers, params={"q": "test", "limit": 5})
     assert r.status_code == 200
@@ -126,7 +142,12 @@ def test_python_search_tasks_bulk_create_update(python_api_app):
     r = client.post(
         "/api/bulk-create-tasks.php",
         headers=headers,
-        json={"tasks": [{"title": "B1", "status": "todo"}, {"title": "B2", "status": "todo"}]},
+        json={
+            "tasks": [
+                {"title": "B1", "status": "todo", "project_id": pid},
+                {"title": "B2", "status": "todo", "project_id": pid},
+            ]
+        },
     )
     assert r.status_code in (200, 201)
     data = r.json().get("data") or r.json()
@@ -157,8 +178,9 @@ def test_python_create_status(python_api_app):
 def test_python_comments_attachments_watchers(python_api_app):
     client = python_api_app.client
     headers = _auth_headers(python_api_app.api_key)
+    pid = _create_directory_project(client, headers, "Python CW project")
     # create task
-    cr = client.post("/api/create-task.php", headers=headers, json={"title": "CW", "status": "todo"})
+    cr = client.post("/api/create-task.php", headers=headers, json={"title": "CW", "status": "todo", "project_id": pid})
     assert cr.status_code == 201
     task_id = (cr.json().get("data") or cr.json()).get("task", {}).get("id")
     if not task_id:
