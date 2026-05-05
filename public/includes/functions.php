@@ -114,7 +114,8 @@ function normalizeRole(string $role): ?string {
 }
 
 function isAdminRole(string $role): bool {
-    return in_array($role, ['admin', 'manager'], true);
+    $r = strtolower(trim($role));
+    return in_array($r, ['admin', 'manager'], true);
 }
 
 function normalizeNullableText($value, int $maxLen): ?string {
@@ -441,7 +442,7 @@ function listOrganizationMembershipIdsForUser(int $userId): array {
  * @return int[]
  */
 function listOrganizationIdsForUserAccess(array $userRow): array {
-    if ((string)($userRow['role'] ?? '') === 'admin') {
+    if (strtolower(trim((string)($userRow['role'] ?? ''))) === 'admin') {
         $db = getDbConnection();
         if (!tableExists($db, 'organizations')) {
             return [];
@@ -483,7 +484,7 @@ function userMayAccessOrganization(array $userRow, int $orgId): bool {
     if ($orgId <= 0) {
         return false;
     }
-    if ((string)($userRow['role'] ?? '') === 'admin' && getOrganizationById($orgId)) {
+    if (strtolower(trim((string)($userRow['role'] ?? ''))) === 'admin' && getOrganizationById($orgId)) {
         return true;
     }
     foreach (listOrganizationIdsForUserAccess($userRow) as $oid) {
@@ -527,6 +528,7 @@ function getUserById($id, bool $includeSensitive = false): ?array {
         if (isset($row['org_id']) && $row['org_id'] !== null) {
             $row['org_id'] = (int)$row['org_id'];
         }
+        $row['role'] = normalizeRole((string)($row['role'] ?? 'member')) ?? 'member';
         $row['person_kind'] = normalizePersonKind($row['person_kind'] ?? 'team_member');
         $row['limited_project_access'] = (int)($row['limited_project_access'] ?? 0);
     }
@@ -549,6 +551,7 @@ function getUserByUsername($username, bool $includeSensitive = false): ?array {
         if (isset($row['org_id']) && $row['org_id'] !== null) {
             $row['org_id'] = (int)$row['org_id'];
         }
+        $row['role'] = normalizeRole((string)($row['role'] ?? 'member')) ?? 'member';
         $row['person_kind'] = normalizePersonKind($row['person_kind'] ?? 'team_member');
         $row['limited_project_access'] = (int)($row['limited_project_access'] ?? 0);
     }
@@ -574,6 +577,7 @@ function listUsers(bool $includeDisabled = false): array {
         if (isset($row['org_id']) && $row['org_id'] !== null) {
             $row['org_id'] = (int)$row['org_id'];
         }
+        $row['role'] = normalizeRole((string)($row['role'] ?? 'member')) ?? 'member';
         $row['person_kind'] = normalizePersonKind($row['person_kind'] ?? 'team_member');
         $row['limited_project_access'] = (int)($row['limited_project_access'] ?? 0);
         $users[] = $row;
@@ -1981,7 +1985,7 @@ function userHasUnrestrictedOrgDirectoryAccess(array $userRow): bool {
     if (normalizePersonKind($userRow['person_kind'] ?? 'team_member') === 'client') {
         return false;
     }
-    $role = (string)($userRow['role'] ?? 'member');
+    $role = strtolower(trim((string)($userRow['role'] ?? 'member')));
     if ($role === 'admin') {
         return true;
     }
