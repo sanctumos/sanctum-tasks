@@ -2408,6 +2408,7 @@ function removeProjectMember(int $actorUserId, int $projectId, int $targetUserId
 
 /**
  * Idempotent: set tasks.project_id where legacy tasks.project string matches a directory project name in the same org as the task creator (best-effort).
+ * Matching is case-insensitive on project name (handles invoicing vs Invoicing).
  */
 function backfillTaskProjectIdsFromLegacyNames(): array {
     $db = getDbConnection();
@@ -2426,7 +2427,7 @@ function backfillTaskProjectIdsFromLegacyNames(): array {
             continue;
         }
         $name = trim((string)$row['project']);
-        $stmt = $db->prepare('SELECT id FROM projects WHERE org_id = :o AND name = :n AND status != \'trashed\' LIMIT 1');
+        $stmt = $db->prepare('SELECT id, name FROM projects WHERE org_id = :o AND LOWER(name) = LOWER(:n) AND status != \'trashed\' LIMIT 1');
         $stmt->bindValue(':o', $orgId, SQLITE3_INTEGER);
         $stmt->bindValue(':n', $name, SQLITE3_TEXT);
         $q = $stmt->execute();
@@ -2435,8 +2436,10 @@ function backfillTaskProjectIdsFromLegacyNames(): array {
             continue;
         }
         $pid = (int)$prow['id'];
-        $u = $db->prepare('UPDATE tasks SET project_id = :p WHERE id = :id AND project_id IS NULL');
+        $canonical = (string)$prow['name'];
+        $u = $db->prepare('UPDATE tasks SET project_id = :p, project = :pn WHERE id = :id AND project_id IS NULL');
         $u->bindValue(':p', $pid, SQLITE3_INTEGER);
+        $u->bindValue(':pn', $canonical, SQLITE3_TEXT);
         $u->bindValue(':id', (int)$row['id'], SQLITE3_INTEGER);
         $u->execute();
         if ($db->changes() > 0) {
@@ -2444,6 +2447,73 @@ function backfillTaskProjectIdsFromLegacyNames(): array {
         }
     }
     return ['updated' => $updated];
+}
+
+/**
+ * Idempotent: link legacy tasks (project_id NULL) whose `tasks.project` label matches one of $legacyLabels
+ * (case-insensitive) to a specific directory project. Optionally restricts to tasks whose creator is in the
+ * same organization as the directory project — disable with $ignoreOrgMismatch for emergency migrations.
+ *
+ * @param string[] $legacyLabels e.g. ['invoicing','invoice','invoices']
+ * @return array{success:bool, updated?:int, error?:string, directory_project?:array}
+ */
+function backfillLegacyTasksToDirectoryProject(int $directoryProjectId, array $legacyLabels, bool $ignoreOrgMismatch = false): array {
+    $directoryProjectId = (int)$directoryProjectId;
+    if ($directoryProjectId <= 0) {
+        return ['success' => false, 'error' => 'Invalid directory project id'];
+    }
+    $proj = getDirectoryProjectById($directoryProjectId);
+    if (!$proj || ($proj['status'] ?? '') === 'trashed') {
+        return ['success' => false, 'error' => 'Directory project not found or trashed'];
+    }
+    $projOrg = (int)($proj['org_id'] ?? 0);
+    $canonicalName = (string)($proj['name'] ?? '');
+    $labels = [];
+    foreach ($legacyLabels as $raw) {
+        $t = strtolower(trim((string)$raw));
+        if ($t !== '') {
+            $labels[$t] = true;
+        }
+    }
+    if ($labels === []) {
+        return ['success' => false, 'error' => 'No legacy labels provided'];
+    }
+    $labelList = array_keys($labels);
+    $db = getDbConnection();
+    $placeholders = [];
+    $bind = [':pid' => [$directoryProjectId, SQLITE3_INTEGER], ':pn' => [$canonicalName, SQLITE3_TEXT]];
+    foreach ($labelList as $i => $lab) {
+        $k = ':lab' . $i;
+        $placeholders[] = $k;
+        $bind[$k] = [$lab, SQLITE3_TEXT];
+    }
+    $inSql = implode(', ', $placeholders);
+    $orgClause = '';
+    if (!$ignoreOrgMismatch && $projOrg > 0) {
+        $orgClause = ' AND EXISTS (SELECT 1 FROM users u WHERE u.id = tasks.created_by_user_id AND u.org_id = :porg)';
+        $bind[':porg'] = [$projOrg, SQLITE3_INTEGER];
+    }
+    $sql = "
+        UPDATE tasks
+        SET project_id = :pid, project = :pn
+        WHERE project_id IS NULL
+          AND project IS NOT NULL
+          AND TRIM(project) <> ''
+          AND LOWER(TRIM(project)) IN ($inSql)
+          $orgClause
+    ";
+    $stmt = $db->prepare($sql);
+    foreach ($bind as $param => $pair) {
+        $stmt->bindValue($param, $pair[0], $pair[1]);
+    }
+    $stmt->execute();
+    $updated = $db->changes();
+    return [
+        'success' => true,
+        'updated' => $updated,
+        'directory_project' => $proj,
+        'labels_matched' => $labelList,
+    ];
 }
 
 /** To-do lists under a directory project (requires directory access). */
