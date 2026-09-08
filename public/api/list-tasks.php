@@ -38,6 +38,12 @@ $filters = [
     'limit' => $limit,
     'offset' => $offset,
 ];
+if (isset($_GET['tag']) && trim((string)$_GET['tag']) !== '') {
+    $filters['tag'] = trim((string)$_GET['tag']);
+}
+if (isset($_GET['exclude_done']) && (string)$_GET['exclude_done'] === '1') {
+    $filters['exclude_done'] = true;
+}
 if (isset($_GET['include_archived_projects']) && (string)$_GET['include_archived_projects'] === '1') {
     $filters['include_archived_projects'] = true;
 }
@@ -49,7 +55,7 @@ $limit = (int)$result['limit'];
 $offset = (int)$result['offset'];
 
 $baseQueryParams = [];
-foreach (['status', 'assigned_to_user_id', 'created_by_user_id', 'priority', 'project', 'project_id', 'list_id', 'q', 'due_before', 'due_after', 'watcher_user_id', 'sort_by', 'sort_dir'] as $k) {
+foreach (['status', 'assigned_to_user_id', 'created_by_user_id', 'priority', 'project', 'project_id', 'list_id', 'q', 'due_before', 'due_after', 'watcher_user_id', 'tag', 'exclude_done', 'sort_by', 'sort_dir'] as $k) {
     if (isset($_GET[$k]) && trim((string)$_GET[$k]) !== '') {
         $baseQueryParams[$k] = (string)$_GET[$k];
     }
