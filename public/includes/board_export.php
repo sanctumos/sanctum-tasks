@@ -905,11 +905,11 @@ function boardExportMarkdownToHtml(string $md): string
     if ($md === '') {
         return '<p class="meta">(empty)</p>';
     }
-    $parsedown = __DIR__ . '/lib/Parsedown.php';
+    $parsedown = __DIR__ . '/lib/ParsedownTasks.php';
     if (is_file($parsedown)) {
         require_once $parsedown;
-        if (class_exists('Parsedown')) {
-            $pd = new Parsedown();
+        if (class_exists('ParsedownTasks')) {
+            $pd = new ParsedownTasks();
             $pd->setSafeMode(true);
             return $pd->text($md);
         }

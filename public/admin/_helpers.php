@@ -207,11 +207,14 @@ if (!function_exists('st_markdown')) {
     /**
      * Render Markdown safely.
      *
-     * Uses Parsedown 1.7.4 (vendored under public/includes/lib/Parsedown.php)
-     * with safe mode + escaped inline HTML, so embedded HTML is treated as
-     * plain text and dangerous URL schemes are stripped. Bare URLs are
-     * auto-linked. Fenced ```mermaid blocks become diagram divs (see
-     * assets/mermaid-init.js). Returns trusted HTML (safe to echo directly).
+     * Uses ParsedownTasks (public/includes/lib/ParsedownTasks.php) —
+     * Parsedown 1.7.4 + ParsedownExtra 0.8.1 (footnotes, definition lists)
+     * with a safe-mode footnote fix — with safe mode + escaped inline HTML,
+     * so embedded HTML is treated as plain text and dangerous URL schemes
+     * are stripped. Bare URLs are auto-linked. Fenced ```mermaid blocks
+     * become diagram divs (see assets/mermaid-init.js). Markdown footnotes
+     * ([^id] refs + [^id]: definitions) render as a linked footnote list.
+     * Returns trusted HTML (safe to echo directly).
      *
      * Used for the task description body and individual comment bodies on
      * the admin task page.
@@ -221,10 +224,10 @@ if (!function_exists('st_markdown')) {
         if ($raw === '') {
             return '';
         }
-        require_once __DIR__ . '/../includes/lib/Parsedown.php';
+        require_once __DIR__ . '/../includes/lib/ParsedownTasks.php';
         static $pd = null;
         if ($pd === null) {
-            $pd = new Parsedown();
+            $pd = new ParsedownTasks();
             $pd->setSafeMode(true);
             $pd->setMarkupEscaped(true);
             $pd->setUrlsLinked(true);
