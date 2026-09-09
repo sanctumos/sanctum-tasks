@@ -1160,3 +1160,13 @@ a.mention:hover { background: rgba(59, 91, 219, 0.15); }
         display: none;
     }
 }
+
+/* Markdown footnotes (ParsedownExtra): ref superscripts + bottom list */
+.markdown-body sup.footnote-ref,
+.markdown-body sup[id^="fnref"] { font-size: 0.75em; line-height: 0; }
+.markdown-body .footnotes { margin-top: 1.5rem; font-size: 0.875rem; color: var(--bs-secondary-color, #6c757d); }
+.markdown-body .footnotes hr { margin: 0.75rem 0; opacity: 0.25; }
+.markdown-body .footnotes ol { padding-left: 1.25rem; margin-bottom: 0; }
+.markdown-body .footnotes li { margin-bottom: 0.35rem; }
+.markdown-body .footnotes li p { margin-bottom: 0.25rem; }
+.markdown-body .footnotes .footnote-backref { text-decoration: none; margin-left: 0.15rem; }

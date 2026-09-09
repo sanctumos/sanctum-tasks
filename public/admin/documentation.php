@@ -22,8 +22,8 @@ if (!is_readable($guidePath)) {
 }
 
 $raw = (string)file_get_contents($guidePath);
-require_once __DIR__ . '/../includes/lib/Parsedown.php';
-$pd = new Parsedown();
+require_once __DIR__ . '/../includes/lib/ParsedownTasks.php';
+$pd = new ParsedownTasks();
 $pd->setSafeMode(true);
 $pd->setMarkupEscaped(true);
 $pd->setBreaksEnabled(true);
