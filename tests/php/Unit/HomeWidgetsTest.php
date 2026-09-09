@@ -78,4 +78,52 @@ final class HomeWidgetsTest extends TestCase
         ], true, null, $viewer);
         $this->assertGreaterThanOrEqual(1, (int)$una['total']);
     }
+
+    public function testBlockedKpiUsesTagNotInvalidStatus(): void
+    {
+        $suffix = bin2hex(random_bytes(3));
+        $admin = createUser("hwb_{$suffix}", 'MemberPass123456', 'admin', false);
+        $this->assertTrue($admin['success']);
+        $aid = (int)$admin['id'];
+        $proj = createDirectoryProject($aid, "HWB {$suffix}", null, false, true);
+        $pid = (int)$proj['id'];
+        applySanctumSchemaMigrations(getDbConnection());
+        $lid = getFirstTodoListIdForProject(getDbConnection(), $pid);
+
+        createTask("blocked open {$suffix}", 'todo', $aid, $aid, null, [
+            'project_id' => $pid,
+            'list_id' => $lid,
+            'tags' => ['blocked'],
+        ]);
+        createTask("blocked done {$suffix}", 'done', $aid, $aid, null, [
+            'project_id' => $pid,
+            'list_id' => $lid,
+            'tags' => ['blocked'],
+        ]);
+        createTask("plain open {$suffix}", 'todo', $aid, $aid, null, [
+            'project_id' => $pid,
+            'list_id' => $lid,
+        ]);
+
+        $viewer = getUserById($aid);
+
+        $invalidStatus = listTasks([
+            'status' => 'blocked',
+            'project_id' => $pid,
+            'limit' => 50,
+        ], true, null, $viewer);
+        $this->assertSame(0, (int)$invalidStatus['total'], 'unknown status must not dump all tasks');
+
+        $taggedOpen = listTasks([
+            'tag' => 'blocked',
+            'exclude_done' => true,
+            'project_id' => $pid,
+            'limit' => 50,
+        ], true, null, $viewer);
+        $this->assertSame(1, (int)$taggedOpen['total']);
+
+        $kpis = computeHomePulseKpis($viewer);
+        $this->assertSame(1, (int)$kpis['blocked']);
+        $this->assertSame(2, (int)$kpis['assigned_open']); // blocked open + plain open
+    }
 }

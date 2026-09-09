@@ -1724,7 +1724,21 @@ function listTasks($filters = [], bool $withPagination = false, ?array $apiUser 
         if ($s !== null) {
             $where[] = 't.status = :status';
             $params[':status'] = [$s, SQLITE3_TEXT];
+        } else {
+            // Non-empty but unknown status must match nothing — never silently drop the filter
+            // (that used to make Home "Blocked" count nearly every task via status=blocked).
+            $where[] = '0';
         }
+    }
+
+    if (isset($filters['tag']) && trim((string)$filters['tag']) !== '') {
+        $tag = truncateString(trim((string)$filters['tag']), 32);
+        // tags_json is a JSON array of strings; match case-insensitively via json_each.
+        $where[] = "EXISTS (
+            SELECT 1 FROM json_each(IFNULL(t.tags_json, '[]')) AS je
+            WHERE lower(je.value) = lower(:tag)
+        )";
+        $params[':tag'] = [$tag, SQLITE3_TEXT];
     }
 
     if (isset($filters['priority']) && $filters['priority'] !== '') {
@@ -2393,8 +2407,10 @@ function computeHomePulseKpis(array $viewer): array {
         'limit' => 1,
     ], true, null, $viewer);
 
+    // "Blocked" is a tag in this product, not a workflow status (statuses are todo/doing/done).
     $blocked = listTasks([
-        'status' => 'blocked',
+        'tag' => 'blocked',
+        'exclude_done' => true,
         'limit' => 1,
     ], true, null, $viewer);
 

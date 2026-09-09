@@ -7,6 +7,7 @@ requireAuth();
 $currentUser = getCurrentUser();
 
 $status = $_GET['status'] ?? '';
+$tag = isset($_GET['tag']) ? trim((string)$_GET['tag']) : '';
 $mineFilter = st_mine_filter_active();
 $assignedToUserId = $_GET['assigned_to_user_id'] ?? '';
 if ($mineFilter) {
@@ -19,16 +20,19 @@ $q = $_GET['q'] ?? '';
 $view = $_GET['view'] ?? '';
 $sortBy = $_GET['sort_by'] ?? 'updated_at';
 $sortDir = strtoupper($_GET['sort_dir'] ?? 'DESC') === 'ASC' ? 'ASC' : 'DESC';
+$excludeDone = isset($_GET['exclude_done']) && (string)$_GET['exclude_done'] === '1';
 
 $homeWidgets = getHomeWidgetsForUser($currentUser);
 // Filter / board deep-links opt into the heavy cross-project board for this request only.
 if (
     isset($_GET['board'])
     || $status !== ''
+    || $tag !== ''
     || $q !== ''
     || $priority !== ''
     || $project !== ''
     || $projectIdFilter > 0
+    || $excludeDone
 ) {
     $homeWidgets['cross_project_board'] = true;
 }
@@ -64,6 +68,12 @@ $filters = [
     'sort_by' => $sortBy,
     'sort_dir' => $sortDir,
 ];
+if ($tag !== '') {
+    $filters['tag'] = $tag;
+}
+if ($excludeDone) {
+    $filters['exclude_done'] = true;
+}
 if ($projectIdFilter > 0) {
     $filters['project_id'] = $projectIdFilter;
 }
@@ -194,7 +204,7 @@ function st_render_task_assignee_html(array $t): string {
             <div class="st-kpi__n"><?= (int)$pulseKpis['assigned_open'] ?></div>
             <div class="st-kpi__l">Assigned to me</div>
         </a>
-        <a class="st-kpi <?= ((int)$pulseKpis['blocked'] > 0) ? 'st-kpi--warn' : '' ?>" href="/admin/?status=blocked&amp;board=1">
+        <a class="st-kpi <?= ((int)$pulseKpis['blocked'] > 0) ? 'st-kpi--warn' : '' ?>" href="/admin/?tag=blocked&amp;exclude_done=1&amp;board=1">
             <div class="st-kpi__n"><?= (int)$pulseKpis['blocked'] ?></div>
             <div class="st-kpi__l">Blocked</div>
         </a>
@@ -412,6 +422,18 @@ function st_render_task_assignee_html(array $t): string {
             <?php endforeach; ?>
         </select>
     </div>
+    <div class="filter-bar__field">
+        <input class="form-control" name="tag" value="<?= htmlspecialchars($tag) ?>" placeholder="Tag" aria-label="Tag" list="tags-filter-list">
+        <datalist id="tags-filter-list">
+            <option value="blocked"></option>
+            <option value="deferred"></option>
+            <option value="review"></option>
+            <option value="halted"></option>
+        </datalist>
+    </div>
+    <?php if ($excludeDone): ?>
+        <input type="hidden" name="exclude_done" value="1">
+    <?php endif; ?>
     <div class="filter-bar__field">
         <select class="form-select" name="priority" aria-label="Priority">
             <option value="">Any priority</option>
