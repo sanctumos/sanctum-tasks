@@ -26,10 +26,10 @@ if ($layoutUser) {
 }
 $qGreeting = 'Hi — I\'m ' . $qTitle . '. Ask me anything about your tasks.';
 ?>
-<link rel="stylesheet" href="/q-bridge/widget/assets/css/widget.css?v=6">
+<link rel="stylesheet" href="/q-bridge/widget/assets/css/widget.css?v=7">
 <script src="/q-bridge/widget/assets/js/markdown-lite.js?v=1"></script>
 <script src="/q-bridge/widget/assets/js/composer-paste.js?v=1"></script>
-<script src="/q-bridge/widget/assets/js/chat-widget.js?v=15"></script>
+<script src="/q-bridge/widget/assets/js/chat-widget.js?v=16"></script>
 <script>
 window.TASKS_ASK_Q_PAGE = <?= json_encode($askQPageContext, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
 document.addEventListener('DOMContentLoaded', function () {

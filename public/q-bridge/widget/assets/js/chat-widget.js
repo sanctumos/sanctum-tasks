@@ -73,7 +73,7 @@
                 <!-- Chat Messages -->
                 <div class="sanctum-chat-messages" id="sanctum-chat-messages">
                     <div class="sanctum-message">
-                        <div class="sanctum-message-avatar">S</div>
+                        <div class="sanctum-message-avatar sanctum-message-avatar--photo"><img src="/q-bridge/widget/assets/icons/q-vernal.png" alt="Q. Vernal" width="32" height="32"></div>
                         <div class="sanctum-message-content">
                             ${config.greeting}
                             <div class="sanctum-message-time">${new Date().toLocaleTimeString()}</div>
@@ -99,9 +99,7 @@
 
             <!-- Chat Bubble — always bottom-right anchor -->
             <div class="sanctum-chat-bubble" id="sanctum-chat-bubble">
-                <svg viewBox="0 0 24 24">
-                    <path d="M20 2H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h4l4 4 4-4h4c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/>
-                </svg>
+                <img class="sanctum-chat-bubble-photo" src="/q-bridge/widget/assets/icons/q-vernal.png" alt="Q. Vernal" width="56" height="56">
                 <div class="notification-badge sanctum-hidden" id="sanctum-notification-badge">0</div>
             </div>
         </div>
@@ -887,8 +885,8 @@
             const messageDiv = document.createElement('div');
             messageDiv.className = 'sanctum-message';
             const avatar = document.createElement('div');
-            avatar.className = 'sanctum-message-avatar';
-            avatar.textContent = 'Q';
+            avatar.className = 'sanctum-message-avatar sanctum-message-avatar--photo';
+            avatar.innerHTML = '<img src="/q-bridge/widget/assets/icons/q-vernal.png" alt="Q. Vernal" width="32" height="32">';
             const messageContent = document.createElement('div');
             messageContent.className = 'sanctum-message-content';
             const body = document.createElement('div');
@@ -985,9 +983,12 @@
             const avatar = document.createElement('div');
             avatar.className = 'sanctum-message-avatar';
             const chatter = (config.chatterUsername || '').trim();
-            avatar.textContent = type === 'user'
-                ? (chatter ? chatter.charAt(0).toUpperCase() : 'U')
-                : 'Q';
+            if (type === 'user') {
+                avatar.textContent = chatter ? chatter.charAt(0).toUpperCase() : 'U';
+            } else {
+                avatar.classList.add('sanctum-message-avatar--photo');
+                avatar.innerHTML = '<img src="/q-bridge/widget/assets/icons/q-vernal.png" alt="Q. Vernal" width="32" height="32">';
+            }
             
             const messageContent = document.createElement('div');
             messageContent.className = 'sanctum-message-content';
@@ -1421,7 +1422,7 @@
             if (state.isInitialized) {
                 ui.elements.messages.innerHTML = `
                     <div class="sanctum-message">
-                        <div class="sanctum-message-avatar">S</div>
+                        <div class="sanctum-message-avatar sanctum-message-avatar--photo"><img src="/q-bridge/widget/assets/icons/q-vernal.png" alt="Q. Vernal" width="32" height="32"></div>
                         <div class="sanctum-message-content">
                             Chat cleared. How can I help you?
                             <div class="sanctum-message-time">${utils.formatTime(new Date())}</div>
